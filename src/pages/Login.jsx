@@ -1,368 +1,1215 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+
 import {
     Eye,
     EyeOff,
     Mail,
-    LockKeyhole,
-    ArrowLeft,
+    Lock,
+    ArrowRight,
+    CheckCircle2,
+    XCircle,
+    X,
 } from "lucide-react";
+
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+
+/* =========================================================
+   TOAST COMPONENT
+========================================================= */
+
+function Toast({ type = "success", message, onClose }) {
+    const isSuccess = type === "success";
+
+    return (
+        <div
+            className="
+                pointer-events-none
+                fixed
+                bottom-8
+                left-1/2
+                z-[9999]
+                w-full
+                -translate-x-1/2
+                px-5
+            "
+        >
+            <div
+                className="
+                    pointer-events-auto
+                    mx-auto
+                    flex
+                    w-full
+                    max-w-[390px]
+                    items-center
+                    gap-3
+                    rounded-[8px]
+                    border
+                    border-white/[0.08]
+                    bg-[#151d21]
+                    px-5
+                    py-4
+                    shadow-[0_20px_70px_rgba(0,0,0,0.55)]
+                    animate-[toastIn_0.35s_ease-out]
+                "
+            >
+                <div
+                    className={`
+                        flex
+                        h-10
+                        w-10
+                        shrink-0
+                        items-center
+                        justify-center
+                        rounded-full
+                        ${isSuccess
+                            ? "bg-[#10aaa9]/10 text-[#10aaa9]"
+                            : "bg-red-500/10 text-red-400"
+                        }
+                    `}
+                >
+                    {isSuccess ? (
+                        <CheckCircle2
+                            size={21}
+                            strokeWidth={2}
+                        />
+                    ) : (
+                        <XCircle
+                            size={21}
+                            strokeWidth={2}
+                        />
+                    )}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-semibold text-white">
+                        {isSuccess
+                            ? "Success"
+                            : "Login failed"}
+                    </p>
+
+                    <p className="mt-0.5 text-[12px] leading-5 text-[#8b969d]">
+                        {message}
+                    </p>
+                </div>
+
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="
+                        flex
+                        h-7
+                        w-7
+                        shrink-0
+                        items-center
+                        justify-center
+                        rounded-full
+                        text-[#68747a]
+                        transition
+                        hover:bg-white/[0.05]
+                        hover:text-white
+                    "
+                >
+                    <X size={15} />
+                </button>
+            </div>
+        </div>
+    );
+}
+
+/* =========================================================
+   FIREBASE ERROR HANDLER
+========================================================= */
+
+function getFirebaseErrorMessage(error) {
+    switch (error?.code) {
+        case "auth/invalid-credential":
+            return "Invalid email or password.";
+
+        case "auth/invalid-login-credentials":
+            return "Invalid email or password.";
+
+        case "auth/user-not-found":
+            return "No account found with this email.";
+
+        case "auth/wrong-password":
+            return "The password you entered is incorrect.";
+
+        case "auth/invalid-email":
+            return "Please enter a valid email address.";
+
+        case "auth/user-disabled":
+            return "This account has been disabled.";
+
+        case "auth/too-many-requests":
+            return "Too many attempts. Please try again later.";
+
+        case "auth/network-request-failed":
+            return "Network error. Please check your internet connection.";
+
+        default:
+            return "Unable to log in. Please try again.";
+    }
+}
+
+/* =========================================================
+   LOGIN PAGE
+========================================================= */
 
 export default function Login() {
     const navigate = useNavigate();
 
-    const [showPassword, setShowPassword] = useState(false);
+    /* =====================================================
+       STATES
+    ===================================================== */
 
-    const [formData, setFormData] = useState({
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+
+    const [showPassword, setShowPassword] =
+        useState(false);
+
+    const [errors, setErrors] = useState({
         email: "",
         password: "",
     });
 
-    const [errors, setErrors] = useState({});
+    const [firebaseError, setFirebaseError] =
+        useState("");
 
-    const handleChange = (e) => {
-        const { name, value } = e.target;
+    const [isLoading, setIsLoading] =
+        useState(false);
 
-        setFormData((prev) => ({
-            ...prev,
-            [name]: value,
-        }));
+    const [toast, setToast] = useState(null);
 
-        // Remove error while typing
-        if (errors[name]) {
-            setErrors((prev) => ({
-                ...prev,
-                [name]: "",
-            }));
-        }
-    };
+    /* =====================================================
+       VALIDATION
+    ===================================================== */
 
     const validateForm = () => {
-        const newErrors = {};
+        const newErrors = {
+            email: "",
+            password: "",
+        };
 
-        const email = formData.email.trim();
-        const password = formData.password;
+        let isValid = true;
 
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!email.trim()) {
+            newErrors.email =
+                "Email is required.";
 
-        if (!email) {
-            newErrors.email = "Email is required.";
-        } else if (!emailRegex.test(email)) {
-            newErrors.email = "Please enter a valid email address.";
+            isValid = false;
+        } else if (
+            !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+                email.trim()
+            )
+        ) {
+            newErrors.email =
+                "Please enter a valid email address.";
+
+            isValid = false;
         }
 
         if (!password) {
-            newErrors.password = "Password is required.";
+            newErrors.password =
+                "Password is required.";
+
+            isValid = false;
         } else if (password.length < 6) {
-            newErrors.password = "Password must be at least 6 characters.";
+            newErrors.password =
+                "Password must be at least 6 characters.";
+
+            isValid = false;
         }
 
         setErrors(newErrors);
 
-        return Object.keys(newErrors).length === 0;
+        return isValid;
     };
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
+    /* =====================================================
+       LOGIN
+    ===================================================== */
 
-        const isValid = validateForm();
+    const handleSubmit = async (event) => {
+        event.preventDefault();
 
-        if (!isValid) {
+        setFirebaseError("");
+        setToast(null);
+
+        if (!validateForm()) {
             return;
         }
 
-        // Temporary authentication
-        // Firebase Auth baad mein yahan connect hoga
-        localStorage.setItem("sonicLoggedIn", "true");
+        try {
+            setIsLoading(true);
 
-        // Login ke baad Home par redirect
-        navigate("/");
+            const userCredential =
+                await signInWithEmailAndPassword(
+                    auth,
+                    email.trim(),
+                    password
+                );
+
+            const user =
+                userCredential.user;
+
+            console.log(
+                "Firebase Login Successful:",
+                user
+            );
+
+            /* =================================================
+               LOCAL STORAGE
+            ================================================= */
+
+            localStorage.setItem(
+                "sonicLoggedIn",
+                "true"
+            );
+
+            localStorage.setItem(
+                "sonicUser",
+                JSON.stringify({
+                    uid: user.uid,
+
+                    name:
+                        user.displayName ||
+                        user.email?.split("@")[0] ||
+                        "Sonic User",
+
+                    email:
+                        user.email ||
+                        email.trim(),
+
+                    photoURL:
+                        user.photoURL || "",
+                })
+            );
+
+            /* =================================================
+               SUCCESS TOAST
+            ================================================= */
+
+            setToast({
+                type: "success",
+                message:
+                    "You're logged in successfully.",
+            });
+
+            /* =================================================
+               REDIRECT AFTER TOAST
+            ================================================= */
+
+            setTimeout(() => {
+                navigate("/");
+            }, 1200);
+
+        } catch (error) {
+            console.error(
+                "Firebase Login Error:",
+                error
+            );
+
+            const message =
+                getFirebaseErrorMessage(
+                    error
+                );
+
+            setFirebaseError(message);
+
+            setToast({
+                type: "error",
+                message,
+            });
+        } finally {
+            setIsLoading(false);
+        }
     };
 
+    /* =====================================================
+       EMAIL CHANGE
+    ===================================================== */
+
+    const handleEmailChange = (event) => {
+        setEmail(event.target.value);
+
+        if (errors.email) {
+            setErrors((previous) => ({
+                ...previous,
+                email: "",
+            }));
+        }
+
+        if (firebaseError) {
+            setFirebaseError("");
+        }
+    };
+
+    /* =====================================================
+       PASSWORD CHANGE
+    ===================================================== */
+
+    const handlePasswordChange = (event) => {
+        setPassword(event.target.value);
+
+        if (errors.password) {
+            setErrors((previous) => ({
+                ...previous,
+                password: "",
+            }));
+        }
+
+        if (firebaseError) {
+            setFirebaseError("");
+        }
+    };
+
+    /* =====================================================
+       FORGOT PASSWORD
+    ===================================================== */
+
+    const handleForgotPassword = () => {
+        setToast({
+            type: "error",
+            message:
+                "Password reset will be available soon.",
+        });
+    };
+
+    /* =====================================================
+       GOOGLE LOGIN
+    ===================================================== */
+
+    const handleGoogleLogin = () => {
+        setToast({
+            type: "error",
+            message:
+                "Google login will be available soon.",
+        });
+    };
+
+    /* =====================================================
+       FACEBOOK LOGIN
+    ===================================================== */
+
+    const handleFacebookLogin = () => {
+        setToast({
+            type: "error",
+            message:
+                "Facebook login will be available soon.",
+        });
+    };
+
+    /* =====================================================
+       RETURN
+    ===================================================== */
+
     return (
-        <div className="min-h-screen bg-[#04090b] p-4 md:p-6">
-            <div className="mx-auto flex min-h-[calc(100vh-32px)] max-w-[1465px] overflow-hidden rounded-[16px] border border-white/[0.10] bg-[#0b1114]">
+        <div className="min-h-screen bg-[#070c0f] text-white">
 
-                {/* ================= LEFT SECTION ================= */}
-                <div className="relative hidden w-1/2 overflow-hidden lg:block">
+            <div className="grid min-h-screen lg:grid-cols-2">
 
-                    {/* Background */}
-                    <div className="absolute inset-0 bg-[#031316]" />
+                {/* =================================================
+                    LEFT SIDE
+                ================================================= */}
 
-                    {/* Teal Glow */}
-                    <div className="absolute left-[35%] top-[20%] h-[450px] w-[450px] rounded-full bg-[#10aaa9]/20 blur-[100px]" />
+                <div className="relative hidden overflow-hidden lg:block">
 
-                    {/* Artist Image */}
+                    {/* Background Image */}
+
                     <img
                         src="/login-artist.png"
-                        alt=""
-                        className="absolute inset-0 h-full w-full object-cover object-center opacity-90"
+                        alt="Sonic"
+                        className="
+                            absolute
+                            inset-0
+                            h-full
+                            w-full
+                            object-cover
+                        "
                     />
 
-                    {/* Image Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-[#031316]/20 via-[#031316]/10 to-[#04090b]" />
+                    {/* Gradient */}
 
-                    {/* Sonic Logo */}
-                    <div className="relative z-10 px-9 pt-9">
-                        <img
-                            src="/sonic.png"
-                            alt="Sonic"
-                            className="h-auto w-[155px] object-contain"
-                        />
-                    </div>
+                    <div
+                        className="
+                            absolute
+                            inset-0
+                            bg-gradient-to-t
+                            from-[#070c0f]
+                            via-[#070c0f]/45
+                            to-transparent
+                        "
+                    />
 
-                    {/* Left Bottom Content */}
-                    <div className="absolute bottom-16 left-9 z-10 max-w-[580px]">
-                        <h2 className="text-[46px] font-semibold leading-[1.15] tracking-[-1.8px] text-white">
-                            Feel the{" "}
-                            <span className="text-[#10aaa9]">melody.</span>
-                            <br />
-                            Live the moment.
-                        </h2>
+                    {/* Overlay */}
 
-                        <div className="mt-7 h-[3px] w-11 bg-[#10aaa9]" />
+                    <div
+                        className="
+                            absolute
+                            inset-0
+                            bg-black/15
+                        "
+                    />
 
-                        <p className="mt-6 max-w-[500px] text-[17px] leading-7 text-[#b7c0c4]">
-                            Sonic brings timeless classics and modern hits together in one
-                            place.
-                        </p>
-                    </div>
-                </div>
+                    {/* =================================================
+                        LOGO
+                    ================================================= */}
 
-                {/* ================= RIGHT SECTION ================= */}
-                <div className="flex w-full items-center justify-center bg-[#0b1114] px-6 py-8 md:px-10 lg:w-1/2 lg:px-12 xl:px-14">
-                    <div className="w-full max-w-[600px]">
-
-                        {/* Mobile Back */}
+                    <div
+                        className="
+                            absolute
+                            left-10
+                            top-10
+                            z-10
+                        "
+                    >
                         <Link
                             to="/"
-                            className="mb-6 inline-flex items-center gap-2 text-[12px] text-[#7f8a90] transition hover:text-white lg:hidden"
+                            className="inline-flex items-center"
                         >
-                            <ArrowLeft size={15} />
-                            Back to Sonic
+                            <img
+                                src="/sonic.png"
+                                alt="Sonic"
+                                className="
+                                    h-[42px]
+                                    w-auto
+                                    object-contain
+                                "
+                            />
                         </Link>
+                    </div>
 
-                        {/* Heading */}
+                    {/* =================================================
+                        LEFT CONTENT
+                    ================================================= */}
+
+                    <div
+                        className="
+                            absolute
+                            bottom-12
+                            left-10
+                            right-10
+                            z-10
+                        "
+                    >
+                        <p
+                            className="
+                                mb-3
+                                text-[11px]
+                                font-semibold
+                                uppercase
+                                tracking-[0.25em]
+                                text-[#10aaa9]
+                            "
+                        >
+                            SONIC MUSIC
+                        </p>
+
+                        <h1
+                            className="
+                                max-w-[560px]
+                                text-[42px]
+                                font-bold
+                                leading-[1.08]
+                                tracking-[-0.02em]
+                                text-white
+                                xl:text-[50px]
+                            "
+                        >
+                            Feel the melody.
+                            <br />
+                            Live the moment.
+                        </h1>
+
+                        <p
+                            className="
+                                mt-5
+                                max-w-[430px]
+                                text-[14px]
+                                leading-6
+                                text-white/60
+                            "
+                        >
+                            Discover new sounds, save your
+                            favorite tracks and enjoy music
+                            made for every moment.
+                        </p>
+                    </div>
+
+                </div>
+
+                {/* =================================================
+                    RIGHT SIDE
+                ================================================= */}
+
+                <div
+                    className="
+                        relative
+                        flex
+                        min-h-screen
+                        items-center
+                        justify-center
+                        px-5
+                        py-10
+                        sm:px-8
+                        lg:px-12
+                    "
+                >
+
+                    {/* =================================================
+                        MOBILE LOGO
+                    ================================================= */}
+
+                    <div
+                        className="
+                            absolute
+                            left-6
+                            top-6
+                            lg:hidden
+                        "
+                    >
+                        <Link to="/">
+                            <img
+                                src="/sonic.png"
+                                alt="Sonic"
+                                className="
+                                    h-[38px]
+                                    w-auto
+                                    object-contain
+                                "
+                            />
+                        </Link>
+                    </div>
+
+                    {/* =================================================
+                        FORM WRAPPER
+                    ================================================= */}
+
+                    <div
+                        className="
+                            w-full
+                            max-w-[440px]
+                            pt-10
+                            lg:pt-0
+                        "
+                    >
+
+                        {/* =================================================
+                            HEADING
+                        ================================================= */}
+
                         <div className="mb-8">
-                            <h2 className="text-[34px] font-semibold tracking-[-1.1px] text-white md:text-[36px]">
+
+                            <p
+                                className="
+                                    mb-3
+                                    text-[11px]
+                                    font-semibold
+                                    uppercase
+                                    tracking-[0.2em]
+                                    text-[#10aaa9]
+                                "
+                            >
+                                WELCOME BACK
+                            </p>
+
+                            <h2
+                                className="
+                                    text-[30px]
+                                    font-bold
+                                    tracking-[-0.02em]
+                                    text-white
+                                    sm:text-[34px]
+                                "
+                            >
                                 Welcome back
                             </h2>
 
-                            <p className="mt-2 text-[16px] text-[#aab3b7]">
-                                Log in to continue to{" "}
-                                <span className="text-[#10aaa9]">Sonic</span>
+                            <p
+                                className="
+                                    mt-2
+                                    text-[13px]
+                                    leading-6
+                                    text-[#7f8a90]
+                                "
+                            >
+                                Log in to continue listening to
+                                your favorite music.
                             </p>
+
                         </div>
 
-                        {/* ================= LOGIN FORM ================= */}
+                        {/* =================================================
+                            ERROR BOX
+                        ================================================= */}
+
+                        {firebaseError && !toast && (
+                            <div
+                                className="
+                                    mb-5
+                                    rounded-[6px]
+                                    border
+                                    border-red-500/15
+                                    bg-red-500/[0.06]
+                                    px-4
+                                    py-3
+                                "
+                            >
+                                <p
+                                    className="
+                                        text-[12px]
+                                        leading-5
+                                        text-red-400
+                                    "
+                                >
+                                    {firebaseError}
+                                </p>
+                            </div>
+                        )}
+
+                        {/* =================================================
+                            LOGIN FORM
+                        ================================================= */}
+
                         <form
                             onSubmit={handleSubmit}
                             className="space-y-5"
-                            noValidate
                         >
 
-                            {/* Email */}
+                            {/* =================================================
+                                EMAIL
+                            ================================================= */}
+
                             <div>
-                                <label className="mb-2.5 block text-[14px] font-medium text-white">
-                                    Email
+
+                                <label
+                                    htmlFor="email"
+                                    className="
+                                        mb-2
+                                        block
+                                        text-[12px]
+                                        font-medium
+                                        text-[#b2b9bc]
+                                    "
+                                >
+                                    Email address
                                 </label>
 
-                                <div className="relative">
+                                <div
+                                    className={`
+                                        flex
+                                        h-[50px]
+                                        items-center
+                                        gap-3
+                                        rounded-[5px]
+                                        border
+                                        bg-[#10171b]
+                                        px-4
+                                        transition
+
+                                        ${errors.email
+                                            ? "border-red-500/50"
+                                            : "border-white/[0.08] focus-within:border-[#10aaa9]/60"
+                                        }
+                                    `}
+                                >
+
                                     <Mail
-                                        size={19}
-                                        className={`absolute left-4 top-1/2 -translate-y-1/2 ${errors.email
-                                            ? "text-red-400"
-                                            : "text-[#909b9f]"
-                                            }`}
+                                        size={17}
+                                        strokeWidth={1.7}
+                                        className="
+                                            shrink-0
+                                            text-[#68747a]
+                                        "
                                     />
 
                                     <input
+                                        id="email"
                                         type="email"
-                                        name="email"
-                                        value={formData.email}
-                                        onChange={handleChange}
+                                        value={email}
+                                        onChange={
+                                            handleEmailChange
+                                        }
                                         placeholder="Enter your email"
                                         autoComplete="email"
-                                        className={`h-[58px] w-full rounded-[10px] border bg-[#11181c] pl-[56px] pr-5 text-[14px] text-white outline-none transition placeholder:text-[#899398] hover:border-white/[0.16] focus:bg-[#131c20] ${errors.email
-                                            ? "border-red-500/70 focus:border-red-500"
-                                            : "border-white/[0.10] focus:border-[#10aaa9]"
-                                            }`}
+                                        disabled={isLoading}
+                                        className="
+                                            h-full
+                                            min-w-0
+                                            flex-1
+                                            bg-transparent
+                                            text-[13px]
+                                            text-white
+                                            outline-none
+                                            placeholder:text-[#566168]
+                                            disabled:cursor-not-allowed
+                                            disabled:opacity-50
+                                        "
                                     />
+
                                 </div>
 
                                 {errors.email && (
-                                    <p className="mt-2 text-[12px] text-red-400">
+                                    <p
+                                        className="
+                                            mt-1.5
+                                            text-[11px]
+                                            text-red-400
+                                        "
+                                    >
                                         {errors.email}
                                     </p>
                                 )}
+
                             </div>
 
-                            {/* Password */}
-                            <div>
-                                <label className="mb-2.5 block text-[14px] font-medium text-white">
-                                    Password
-                                </label>
+                            {/* =================================================
+                                PASSWORD
+                            ================================================= */}
 
-                                <div className="relative">
-                                    <LockKeyhole
-                                        size={19}
-                                        className={`absolute left-4 top-1/2 -translate-y-1/2 ${errors.password
-                                            ? "text-red-400"
-                                            : "text-[#909b9f]"
-                                            }`}
+                            <div>
+
+                                <div
+                                    className="
+                                        mb-2
+                                        flex
+                                        items-center
+                                        justify-between
+                                    "
+                                >
+
+                                    <label
+                                        htmlFor="password"
+                                        className="
+                                            block
+                                            text-[12px]
+                                            font-medium
+                                            text-[#b2b9bc]
+                                        "
+                                    >
+                                        Password
+                                    </label>
+
+                                    <button
+                                        type="button"
+                                        onClick={
+                                            handleForgotPassword
+                                        }
+                                        className="
+                                            text-[11px]
+                                            font-medium
+                                            text-[#10aaa9]
+                                            transition
+                                            hover:text-[#12c1bf]
+                                        "
+                                    >
+                                        Forgot password?
+                                    </button>
+
+                                </div>
+
+                                <div
+                                    className={`
+                                        flex
+                                        h-[50px]
+                                        items-center
+                                        gap-3
+                                        rounded-[5px]
+                                        border
+                                        bg-[#10171b]
+                                        px-4
+                                        transition
+
+                                        ${errors.password
+                                            ? "border-red-500/50"
+                                            : "border-white/[0.08] focus-within:border-[#10aaa9]/60"
+                                        }
+                                    `}
+                                >
+
+                                    <Lock
+                                        size={17}
+                                        strokeWidth={1.7}
+                                        className="
+                                            shrink-0
+                                            text-[#68747a]
+                                        "
                                     />
 
                                     <input
-                                        type={showPassword ? "text" : "password"}
-                                        name="password"
-                                        value={formData.password}
-                                        onChange={handleChange}
+                                        id="password"
+                                        type={
+                                            showPassword
+                                                ? "text"
+                                                : "password"
+                                        }
+                                        value={password}
+                                        onChange={
+                                            handlePasswordChange
+                                        }
                                         placeholder="Enter your password"
                                         autoComplete="current-password"
-                                        className={`h-[58px] w-full rounded-[10px] border bg-[#11181c] pl-[56px] pr-[56px] text-[14px] text-white outline-none transition placeholder:text-[#899398] hover:border-white/[0.16] focus:bg-[#131c20] ${errors.password
-                                            ? "border-red-500/70 focus:border-red-500"
-                                            : "border-white/[0.10] focus:border-[#10aaa9]"
-                                            }`}
+                                        disabled={isLoading}
+                                        className="
+                                            h-full
+                                            min-w-0
+                                            flex-1
+                                            bg-transparent
+                                            text-[13px]
+                                            text-white
+                                            outline-none
+                                            placeholder:text-[#566168]
+                                            disabled:cursor-not-allowed
+                                            disabled:opacity-50
+                                        "
                                     />
 
-                                    {/* Show / Hide Password */}
                                     <button
                                         type="button"
-                                        onClick={() => setShowPassword(!showPassword)}
-                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-[#909b9f] transition hover:text-white"
+                                        onClick={() =>
+                                            setShowPassword(
+                                                !showPassword
+                                            )
+                                        }
+                                        disabled={isLoading}
                                         aria-label={
                                             showPassword
                                                 ? "Hide password"
                                                 : "Show password"
                                         }
+                                        className="
+                                            flex
+                                            h-7
+                                            w-7
+                                            shrink-0
+                                            items-center
+                                            justify-center
+                                            rounded-full
+                                            text-[#68747a]
+                                            transition
+                                            hover:bg-white/[0.05]
+                                            hover:text-white
+                                            disabled:opacity-40
+                                        "
                                     >
                                         {showPassword ? (
-                                            <EyeOff size={20} />
+                                            <EyeOff size={16} />
                                         ) : (
-                                            <Eye size={20} />
+                                            <Eye size={16} />
                                         )}
                                     </button>
+
                                 </div>
 
                                 {errors.password && (
-                                    <p className="mt-2 text-[12px] text-red-400">
+                                    <p
+                                        className="
+                                            mt-1.5
+                                            text-[11px]
+                                            text-red-400
+                                        "
+                                    >
                                         {errors.password}
                                     </p>
                                 )}
+
                             </div>
 
-                            {/* Forgot Password */}
-                            <div className="flex justify-end pt-1">
-                                <button
-                                    type="button"
-                                    className="text-[13px] font-medium text-[#10aaa9] transition hover:text-[#16c7c4]"
-                                >
-                                    Forgot password?
-                                </button>
-                            </div>
+                            {/* =================================================
+                                LOGIN BUTTON
+                            ================================================= */}
 
-                            {/* Login Button */}
                             <button
                                 type="submit"
-                                className="h-[58px] w-full rounded-[10px] bg-[#10aaa9] text-[15px] font-semibold text-white shadow-[0_8px_30px_rgba(16,170,169,0.14)] transition hover:bg-[#12bdbc] active:scale-[0.99]"
+                                disabled={isLoading}
+                                className="
+                                    flex
+                                    h-[50px]
+                                    w-full
+                                    items-center
+                                    justify-center
+                                    gap-2
+                                    rounded-[5px]
+                                    bg-[#10aaa9]
+                                    text-[13px]
+                                    font-semibold
+                                    text-white
+                                    shadow-[0_8px_30px_rgba(16,170,169,0.12)]
+                                    transition-all
+                                    duration-200
+                                    hover:bg-[#12b9b8]
+                                    hover:shadow-[0_10px_35px_rgba(16,170,169,0.18)]
+                                    active:scale-[0.99]
+                                    disabled:cursor-not-allowed
+                                    disabled:opacity-60
+                                "
                             >
-                                Log In
+
+                                {isLoading ? (
+                                    <>
+                                        <span
+                                            className="
+                                                h-4
+                                                w-4
+                                                animate-spin
+                                                rounded-full
+                                                border-2
+                                                border-white/30
+                                                border-t-white
+                                            "
+                                        />
+
+                                        <span>
+                                            Logging in...
+                                        </span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span>
+                                            Log in
+                                        </span>
+
+                                        <ArrowRight
+                                            size={16}
+                                        />
+                                    </>
+                                )}
+
                             </button>
+
                         </form>
 
-                        {/* ================= DIVIDER ================= */}
-                        <div className="my-7 flex items-center gap-4">
-                            <div className="h-px flex-1 bg-white/[0.10]" />
+                        {/* =================================================
+                            DIVIDER
+                        ================================================= */}
 
-                            <span className="whitespace-nowrap text-[13px] text-[#8f999d]">
-                                or continue with
+                        <div
+                            className="
+                                my-7
+                                flex
+                                items-center
+                                gap-4
+                            "
+                        >
+
+                            <div
+                                className="
+                                    h-px
+                                    flex-1
+                                    bg-white/[0.07]
+                                "
+                            />
+
+                            <span
+                                className="
+                                    text-[10px]
+                                    uppercase
+                                    tracking-[0.15em]
+                                    text-[#59646a]
+                                "
+                            >
+                                Or continue with
                             </span>
 
-                            <div className="h-px flex-1 bg-white/[0.10]" />
+                            <div
+                                className="
+                                    h-px
+                                    flex-1
+                                    bg-white/[0.07]
+                                "
+                            />
+
                         </div>
 
-                        {/* ================= SOCIAL LOGIN ================= */}
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {/* =================================================
+                            SOCIAL BUTTONS
+                        ================================================= */}
 
-                            {/* Google */}
+                        <div className="grid grid-cols-2 gap-3">
+
+                            {/* =================================================
+                                GOOGLE
+                            ================================================= */}
+
                             <button
                                 type="button"
-                                className="flex h-[58px] items-center justify-center gap-3 rounded-[10px] border border-white/[0.10] bg-[#11181c] text-[13px] font-medium text-white transition hover:border-white/[0.18] hover:bg-[#151e22]"
+                                onClick={
+                                    handleGoogleLogin
+                                }
+                                className="
+                                    flex
+                                    h-[48px]
+                                    items-center
+                                    justify-center
+                                    gap-2.5
+                                    rounded-[5px]
+                                    border
+                                    border-white/[0.08]
+                                    bg-[#10171b]
+                                    text-[12px]
+                                    font-medium
+                                    text-[#c5cbce]
+                                    transition
+                                    hover:border-white/[0.14]
+                                    hover:bg-[#141d21]
+                                    hover:text-white
+                                "
                             >
+
                                 <svg
-                                    width="20"
-                                    height="20"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
+                                    width="18"
+                                    height="18"
+                                    viewBox="0 0 48 48"
                                     xmlns="http://www.w3.org/2000/svg"
-                                    aria-hidden="true"
+                                    className="shrink-0"
                                 >
                                     <path
-                                        d="M21.805 12.23c0-.79-.07-1.55-.205-2.28H12v4.31h5.49a4.69 4.69 0 0 1-2.04 3.08v2.56h3.3c1.93-1.78 3.055-4.4 3.055-7.67Z"
-                                        fill="#4285F4"
+                                        fill="#FFC107"
+                                        d="M43.6 20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.7 1.1 7.8 2.9l5.7-5.7C34 6 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c11.6 0 19.3-8.1 19.3-19.5 0-1.3-.1-2.7-.3-4.5h.6z"
                                     />
 
                                     <path
-                                        d="M12 22c2.76 0 5.08-.91 6.77-2.47l-3.3-2.56c-.91.61-2.07.97-3.47.97-2.67 0-4.94-1.8-5.75-4.22H2.84v2.64A10.22 10.22 0 0 0 12 22Z"
-                                        fill="#34A853"
+                                        fill="#FF3D00"
+                                        d="M6.3 14.7l6.6 4.8C14.7 15.1 18.9 12 24 12c3 0 5.7 1.1 7.8 2.9l5.7-5.7C34 6 29.3 4 24 4c-7.7 0-14.4 4.4-17.7 10.7z"
                                     />
 
                                     <path
-                                        d="M6.25 13.72A6.14 6.14 0 0 1 5.93 12c0-.6.11-1.18.32-1.72V7.64H2.84A10 10 0 0 0 1.78 12c0 1.61.39 3.13 1.06 4.36l3.41-2.64Z"
-                                        fill="#FBBC05"
+                                        fill="#4CAF50"
+                                        d="M24 44c5.1 0 9.8-1.9 13.3-5.1l-6.2-5.2C29.1 35.2 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.5 16.2 44 24 44z"
                                     />
 
                                     <path
-                                        d="M12 6.06c1.5 0 2.85.52 3.91 1.54l2.93-2.93C17.08 3.05 14.76 2 12 2a10.22 10.22 0 0 0-9.16 5.64l3.41 2.64C7.06 7.86 9.33 6.06 12 6.06Z"
-                                        fill="#EA4335"
+                                        fill="#1976D2"
+                                        d="M43.6 20H24v8h11.3c-.8 2.3-2.3 4.2-4.2 5.7l6.2 5.2C40.9 35.6 44 30 44 24c0-1.3-.1-2.7-.4-4z"
                                     />
                                 </svg>
 
                                 Continue with Google
                             </button>
 
-                            {/* Facebook */}
+                            {/* =================================================
+                                FACEBOOK
+                            ================================================= */}
+
                             <button
                                 type="button"
-                                className="flex h-[58px] items-center justify-center gap-3 rounded-[10px] border border-white/[0.10] bg-[#11181c] text-[13px] font-medium text-white transition hover:border-white/[0.18] hover:bg-[#151e22]"
+                                onClick={
+                                    handleFacebookLogin
+                                }
+                                className="
+                                    flex
+                                    h-[48px]
+                                    items-center
+                                    justify-center
+                                    gap-2.5
+                                    rounded-[5px]
+                                    border
+                                    border-white/[0.08]
+                                    bg-[#10171b]
+                                    text-[12px]
+                                    font-medium
+                                    text-[#c5cbce]
+                                    transition
+                                    hover:border-white/[0.14]
+                                    hover:bg-[#141d21]
+                                    hover:text-white
+                                "
                             >
+
                                 <svg
-                                    width="20"
-                                    height="20"
+                                    width="18"
+                                    height="18"
                                     viewBox="0 0 24 24"
-                                    fill="none"
                                     xmlns="http://www.w3.org/2000/svg"
-                                    aria-hidden="true"
+                                    className="shrink-0"
                                 >
-                                    <path
-                                        d="M24 12C24 5.373 18.627 0 12 0S0 5.373 0 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078V12h3.047V9.356c0-3.007 1.792-4.668 4.533-4.668 1.312 0 2.686.234 2.686.234v2.953h-1.514c-1.49 0-1.955.925-1.955 1.875V12h3.328l-.532 3.469h-2.796v8.385C19.612 22.954 24 17.99 24 12Z"
+                                    <circle
+                                        cx="12"
+                                        cy="12"
+                                        r="12"
                                         fill="#1877F2"
                                     />
 
                                     <path
-                                        d="M16.671 15.469L17.203 12h-3.328V9.75c0-.95.465-1.875 1.955-1.875h1.514V4.922s-1.374-.234-2.686-.234c-2.741 0-4.533 1.661-4.533 4.668V12H7.078v3.469h3.047v8.385a12.08 12.08 0 0 0 3.75 0v-8.385h2.796Z"
                                         fill="#FFFFFF"
+                                        d="M13.6 21v-8h2.7l.4-3.1h-3.1V7.9c0-.9.3-1.5 1.6-1.5h1.7V3.6c-.3 0-1.3-.1-2.5-.1-2.5 0-4.2 1.5-4.2 4.3v2.1H7.4V13h2.8v8h3.4z"
                                     />
                                 </svg>
 
                                 Continue with Facebook
                             </button>
+
                         </div>
 
-                        {/* ================= SIGN UP ================= */}
-                        <div className="mt-7 text-center text-[13px] text-[#a4adb1]">
+                        {/* =================================================
+                            SIGNUP
+                        ================================================= */}
+
+                        <p
+                            className="
+                                mt-7
+                                text-center
+                                text-[12px]
+                                text-[#69757b]
+                            "
+                        >
                             Don't have an account?{" "}
+
                             <Link
                                 to="/signup"
-                                className="font-medium text-[#10aaa9] transition hover:text-[#16c7c4]"
+                                className="
+                                    font-medium
+                                    text-[#10aaa9]
+                                    transition
+                                    hover:text-[#12c1bf]
+                                "
                             >
-                                Create account
+                                Sign up
                             </Link>
+                        </p>
+
+                        {/* =================================================
+                            CONTINUE WITHOUT LOGIN
+                        ================================================= */}
+
+                        <div className="mt-5 text-center">
+
+                            <Link
+                                to="/"
+                                className="
+                                    text-[11px]
+                                    text-[#59656b]
+                                    transition
+                                    hover:text-[#8b969d]
+                                "
+                            >
+                                Continue browsing without login
+                            </Link>
+
                         </div>
 
                     </div>
                 </div>
+
             </div>
+
+            {/* =================================================
+                BOTTOM CENTER TOAST
+            ================================================= */}
+
+            {toast && (
+                <Toast
+                    type={toast.type}
+                    message={toast.message}
+                    onClose={() =>
+                        setToast(null)
+                    }
+                />
+            )}
+
         </div>
     );
 }

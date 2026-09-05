@@ -7,13 +7,159 @@ import {
     LockKeyhole,
     User,
     ArrowLeft,
+    CheckCircle2,
+    XCircle,
+    X,
 } from "lucide-react";
+
+import {
+    createUserWithEmailAndPassword,
+    updateProfile,
+} from "firebase/auth";
+
+import { auth } from "@/lib/firebase";
+
+/* =========================================================
+   TOAST
+========================================================= */
+
+function Toast({ type = "success", message, onClose }) {
+    const isSuccess = type === "success";
+
+    return (
+        <div
+            className="
+                pointer-events-none
+                fixed
+                bottom-8
+                left-1/2
+                z-[9999]
+                w-full
+                -translate-x-1/2
+                px-5
+            "
+        >
+            <div
+                className="
+                    pointer-events-auto
+                    mx-auto
+                    flex
+                    w-full
+                    max-w-[390px]
+                    items-center
+                    gap-3
+                    rounded-[8px]
+                    border
+                    border-white/[0.08]
+                    bg-[#151d21]
+                    px-5
+                    py-4
+                    shadow-[0_20px_70px_rgba(0,0,0,0.55)]
+                    animate-[toastIn_0.35s_ease-out]
+                "
+            >
+                <div
+                    className={`
+                        flex
+                        h-10
+                        w-10
+                        shrink-0
+                        items-center
+                        justify-center
+                        rounded-full
+                        ${isSuccess
+                            ? "bg-[#10aaa9]/10 text-[#10aaa9]"
+                            : "bg-red-500/10 text-red-400"
+                        }
+                    `}
+                >
+                    {isSuccess ? (
+                        <CheckCircle2 size={21} strokeWidth={2} />
+                    ) : (
+                        <XCircle size={21} strokeWidth={2} />
+                    )}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-semibold text-white">
+                        {isSuccess
+                            ? "Account Created"
+                            : "Signup failed"}
+                    </p>
+
+                    <p className="mt-0.5 text-[12px] leading-5 text-[#8b969d]">
+                        {message}
+                    </p>
+                </div>
+
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="
+                        flex
+                        h-7
+                        w-7
+                        shrink-0
+                        items-center
+                        justify-center
+                        rounded-full
+                        text-[#68747a]
+                        transition
+                        hover:bg-white/[0.05]
+                        hover:text-white
+                    "
+                >
+                    <X size={15} />
+                </button>
+            </div>
+        </div>
+    );
+}
+
+/* =========================================================
+   FIREBASE ERROR HANDLER
+========================================================= */
+
+function getFirebaseErrorMessage(error) {
+    switch (error?.code) {
+        case "auth/email-already-in-use":
+            return "An account already exists with this email.";
+
+        case "auth/invalid-email":
+            return "Please enter a valid email address.";
+
+        case "auth/weak-password":
+            return "Password is too weak. Use at least 6 characters.";
+
+        case "auth/network-request-failed":
+            return "Network error. Please check your internet connection.";
+
+        case "auth/operation-not-allowed":
+            return "Email and password signup is not enabled.";
+
+        case "auth/too-many-requests":
+            return "Too many attempts. Please try again later.";
+
+        default:
+            return "Unable to create your account. Please try again.";
+    }
+}
+
+/* =========================================================
+   SIGNUP PAGE
+========================================================= */
 
 export default function Signup() {
     const navigate = useNavigate();
 
+    /* =====================================================
+       STATES
+    ===================================================== */
+
     const [showPassword, setShowPassword] = useState(false);
-    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+    const [showConfirmPassword, setShowConfirmPassword] =
+        useState(false);
 
     const [formData, setFormData] = useState({
         name: "",
@@ -25,22 +171,47 @@ export default function Signup() {
 
     const [errors, setErrors] = useState({});
 
+    const [firebaseError, setFirebaseError] = useState("");
+
+    const [isLoading, setIsLoading] = useState(false);
+
+    const [toast, setToast] = useState(null);
+
+    /* =====================================================
+       HANDLE CHANGE
+    ===================================================== */
+
     const handleChange = (e) => {
-        const { name, value, type, checked } = e.target;
+        const {
+            name,
+            value,
+            type,
+            checked,
+        } = e.target;
 
         setFormData((prev) => ({
             ...prev,
-            [name]: type === "checkbox" ? checked : value,
+            [name]:
+                type === "checkbox"
+                    ? checked
+                    : value,
         }));
 
-        // Remove error while typing
         if (errors[name]) {
             setErrors((prev) => ({
                 ...prev,
                 [name]: "",
             }));
         }
+
+        if (firebaseError) {
+            setFirebaseError("");
+        }
     };
+
+    /* =====================================================
+       VALIDATE FORM
+    ===================================================== */
 
     const validateForm = () => {
         const newErrors = {};
@@ -48,41 +219,59 @@ export default function Signup() {
         const name = formData.name.trim();
         const email = formData.email.trim();
         const password = formData.password;
-        const confirmPassword = formData.confirmPassword;
+        const confirmPassword =
+            formData.confirmPassword;
 
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const emailRegex =
+            /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-        // Full name
+        /* Full Name */
+
         if (!name) {
-            newErrors.name = "Full name is required.";
+            newErrors.name =
+                "Full name is required.";
         } else if (name.length < 2) {
-            newErrors.name = "Name must be at least 2 characters.";
+            newErrors.name =
+                "Name must be at least 2 characters.";
         } else if (!/^[a-zA-Z\s]+$/.test(name)) {
-            newErrors.name = "Name can only contain letters.";
+            newErrors.name =
+                "Name can only contain letters.";
         }
 
-        // Email
+        /* Email */
+
         if (!email) {
-            newErrors.email = "Email is required.";
+            newErrors.email =
+                "Email is required.";
         } else if (!emailRegex.test(email)) {
-            newErrors.email = "Please enter a valid email address.";
+            newErrors.email =
+                "Please enter a valid email address.";
         }
 
-        // Password
+        /* Password */
+
         if (!password) {
-            newErrors.password = "Password is required.";
+            newErrors.password =
+                "Password is required.";
         } else if (password.length < 6) {
-            newErrors.password = "Password must be at least 6 characters.";
+            newErrors.password =
+                "Password must be at least 6 characters.";
         }
 
-        // Confirm password
+        /* Confirm Password */
+
         if (!confirmPassword) {
-            newErrors.confirmPassword = "Please confirm your password.";
-        } else if (confirmPassword !== password) {
-            newErrors.confirmPassword = "Passwords do not match.";
+            newErrors.confirmPassword =
+                "Please confirm your password.";
+        } else if (
+            confirmPassword !== password
+        ) {
+            newErrors.confirmPassword =
+                "Passwords do not match.";
         }
 
-        // Terms
+        /* Terms */
+
         if (!formData.terms) {
             newErrors.terms =
                 "Please accept the Terms of Service and Privacy Policy.";
@@ -93,8 +282,15 @@ export default function Signup() {
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleSubmit = (e) => {
+    /* =====================================================
+       CREATE ACCOUNT
+    ===================================================== */
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
+
+        setFirebaseError("");
+        setToast(null);
 
         const isValid = validateForm();
 
@@ -102,118 +298,424 @@ export default function Signup() {
             return;
         }
 
-        // Temporary authentication
-        // Firebase Auth baad mein yahan connect hoga
-        localStorage.setItem("sonicLoggedIn", "true");
+        try {
+            setIsLoading(true);
 
-        // Optional: save basic user information temporarily
-        localStorage.setItem(
-            "sonicUser",
-            JSON.stringify({
-                name: formData.name.trim(),
-                email: formData.email.trim(),
-            })
-        );
+            /* Create Firebase account */
 
-        // Signup ke baad Home par redirect
-        navigate("/");
+            const userCredential =
+                await createUserWithEmailAndPassword(
+                    auth,
+                    formData.email.trim(),
+                    formData.password
+                );
+
+            const user = userCredential.user;
+
+            /* Save user's name in Firebase */
+
+            await updateProfile(user, {
+                displayName:
+                    formData.name.trim(),
+            });
+
+            console.log(
+                "Firebase Signup Successful:",
+                user
+            );
+
+            /* =================================================
+               LOCAL STORAGE
+            ================================================= */
+
+            localStorage.setItem(
+                "sonicLoggedIn",
+                "true"
+            );
+
+            localStorage.setItem(
+                "sonicUser",
+                JSON.stringify({
+                    uid: user.uid,
+                    name: formData.name.trim(),
+                    email:
+                        user.email ||
+                        formData.email.trim(),
+                    photoURL:
+                        user.photoURL || "",
+                })
+            );
+
+            /* =================================================
+               SUCCESS TOAST
+            ================================================= */
+
+            setToast({
+                type: "success",
+                message:
+                    "Your Sonic account has been created successfully.",
+            });
+
+            /* =================================================
+               REDIRECT
+            ================================================= */
+
+            setTimeout(() => {
+                navigate("/");
+            }, 1400);
+        } catch (error) {
+            console.error(
+                "Firebase Signup Error:",
+                error
+            );
+
+            const message =
+                getFirebaseErrorMessage(error);
+
+            setFirebaseError(message);
+
+            setToast({
+                type: "error",
+                message,
+            });
+        } finally {
+            setIsLoading(false);
+        }
     };
+
+    /* =====================================================
+       GOOGLE SIGNUP
+    ===================================================== */
+
+    const handleGoogleSignup = () => {
+        setToast({
+            type: "error",
+            message:
+                "Google signup will be available soon.",
+        });
+    };
+
+    /* =====================================================
+       FACEBOOK SIGNUP
+    ===================================================== */
+
+    const handleFacebookSignup = () => {
+        setToast({
+            type: "error",
+            message:
+                "Facebook signup will be available soon.",
+        });
+    };
+
+    /* =====================================================
+       JSX
+    ===================================================== */
 
     return (
         <div className="min-h-screen bg-[#04090b] p-4 md:p-6">
-            <div className="mx-auto flex min-h-[calc(100vh-32px)] max-w-[1465px] overflow-hidden rounded-[16px] border border-white/[0.10] bg-[#0b1114]">
 
-                {/* ================= LEFT SECTION ================= */}
+            <div
+                className="
+                    mx-auto
+                    flex
+                    min-h-[calc(100vh-32px)]
+                    max-w-[1465px]
+                    overflow-hidden
+                    rounded-[16px]
+                    border
+                    border-white/[0.10]
+                    bg-[#0b1114]
+                "
+            >
+
+                {/* =================================================
+                    LEFT SECTION
+                ================================================= */}
+
                 <div className="relative hidden w-1/2 overflow-hidden lg:block">
 
                     {/* Background */}
+
                     <div className="absolute inset-0 bg-[#031316]" />
 
                     {/* Glow */}
-                    <div className="absolute left-[35%] top-[20%] h-[450px] w-[450px] rounded-full bg-[#10aaa9]/20 blur-[100px]" />
+
+                    <div
+                        className="
+                            absolute
+                            left-[35%]
+                            top-[20%]
+                            h-[450px]
+                            w-[450px]
+                            rounded-full
+                            bg-[#10aaa9]/20
+                            blur-[100px]
+                        "
+                    />
 
                     {/* Artist Image */}
+
                     <img
                         src="/signup-artist.png"
                         alt=""
-                        className="absolute inset-0 h-full w-full object-cover object-center opacity-90"
+                        className="
+                            absolute
+                            inset-0
+                            h-full
+                            w-full
+                            object-cover
+                            object-center
+                            opacity-90
+                        "
                     />
 
                     {/* Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-[#031316]/20 via-[#031316]/10 to-[#04090b]" />
+
+                    <div
+                        className="
+                            absolute
+                            inset-0
+                            bg-gradient-to-b
+                            from-[#031316]/20
+                            via-[#031316]/10
+                            to-[#04090b]
+                        "
+                    />
 
                     {/* Sonic Logo */}
-                    <div className="relative z-10 px-9 pt-9">
+
+                    <div
+                        className="
+                            relative
+                            z-10
+                            px-9
+                            pt-9
+                        "
+                    >
                         <img
                             src="/sonic.png"
                             alt="Sonic"
-                            className="h-auto w-[155px] object-contain"
+                            className="
+                                h-auto
+                                w-[155px]
+                                object-contain
+                            "
                         />
                     </div>
 
                     {/* Bottom Content */}
-                    <div className="absolute bottom-16 left-9 z-10 max-w-[580px]">
-                        <h2 className="text-[46px] font-semibold leading-[1.15] tracking-[-1.8px] text-white">
+
+                    <div
+                        className="
+                            absolute
+                            bottom-16
+                            left-9
+                            z-10
+                            max-w-[580px]
+                        "
+                    >
+                        <h2
+                            className="
+                                text-[46px]
+                                font-semibold
+                                leading-[1.15]
+                                tracking-[-1.8px]
+                                text-white
+                            "
+                        >
                             Your music.
                             <br />
+
                             <span className="text-[#10aaa9]">
                                 Your moment.
                             </span>
                         </h2>
 
-                        <div className="mt-7 h-[3px] w-11 bg-[#10aaa9]" />
+                        <div
+                            className="
+                                mt-7
+                                h-[3px]
+                                w-11
+                                bg-[#10aaa9]
+                            "
+                        />
 
-                        <p className="mt-6 max-w-[500px] text-[17px] leading-7 text-[#b7c0c4]">
-                            Create your Sonic account and discover music that
-                            feels like you.
+                        <p
+                            className="
+                                mt-6
+                                max-w-[500px]
+                                text-[17px]
+                                leading-7
+                                text-[#b7c0c4]
+                            "
+                        >
+                            Create your Sonic account and
+                            discover music that feels like you.
                         </p>
                     </div>
                 </div>
 
-                {/* ================= RIGHT SECTION ================= */}
-                <div className="flex w-full items-center justify-center bg-[#0b1114] px-6 py-8 md:px-10 lg:w-1/2 lg:px-12 xl:px-14">
+                {/* =================================================
+                    RIGHT SECTION
+                ================================================= */}
+
+                <div
+                    className="
+                        flex
+                        w-full
+                        items-center
+                        justify-center
+                        bg-[#0b1114]
+                        px-6
+                        py-8
+                        md:px-10
+                        lg:w-1/2
+                        lg:px-12
+                        xl:px-14
+                    "
+                >
+
                     <div className="w-full max-w-[600px]">
 
-                        {/* Mobile Back */}
+                        {/* =================================================
+                            MOBILE BACK
+                        ================================================= */}
+
                         <Link
                             to="/"
-                            className="mb-6 inline-flex items-center gap-2 text-[12px] text-[#7f8a90] transition hover:text-white lg:hidden"
+                            className="
+                                mb-6
+                                inline-flex
+                                items-center
+                                gap-2
+                                text-[12px]
+                                text-[#7f8a90]
+                                transition
+                                hover:text-white
+                                lg:hidden
+                            "
                         >
                             <ArrowLeft size={15} />
                             Back to Sonic
                         </Link>
 
-                        {/* Heading */}
+                        {/* =================================================
+                            HEADING
+                        ================================================= */}
+
                         <div className="mb-7">
-                            <h2 className="text-[34px] font-semibold tracking-[-1.1px] text-white md:text-[36px]">
+
+                            <h2
+                                className="
+                                    text-[34px]
+                                    font-semibold
+                                    tracking-[-1.1px]
+                                    text-white
+                                    md:text-[36px]
+                                "
+                            >
                                 Create your account
                             </h2>
 
-                            <p className="mt-2 text-[16px] text-[#aab3b7]">
-                                Join Sonic and start your musical journey
+                            <p
+                                className="
+                                    mt-2
+                                    text-[16px]
+                                    text-[#aab3b7]
+                                "
+                            >
+                                Join Sonic and start your
+                                musical journey
                             </p>
+
                         </div>
 
-                        {/* ================= FORM ================= */}
+                        {/* =================================================
+                            FIREBASE ERROR
+                        ================================================= */}
+
+                        {firebaseError && !toast && (
+                            <div
+                                className="
+                                    mb-5
+                                    rounded-[6px]
+                                    border
+                                    border-red-500/15
+                                    bg-red-500/[0.06]
+                                    px-4
+                                    py-3
+                                "
+                            >
+                                <p
+                                    className="
+                                        text-[12px]
+                                        leading-5
+                                        text-red-400
+                                    "
+                                >
+                                    {firebaseError}
+                                </p>
+                            </div>
+                        )}
+
+                        {/* =================================================
+                            FORM
+                        ================================================= */}
+
                         <form
                             onSubmit={handleSubmit}
                             className="space-y-4"
                             noValidate
                         >
 
-                            {/* Full Name */}
+                            {/* =================================================
+                                FULL NAME
+                            ================================================= */}
+
                             <div>
-                                <label className="mb-2.5 block text-[14px] font-medium text-white">
+
+                                <label
+                                    className="
+                                        mb-2
+                                        block
+                                        text-[12px]
+                                        font-medium
+                                        text-[#b2b9bc]
+                                    "
+                                >
                                     Full name
                                 </label>
 
-                                <div className="relative">
+                                <div
+                                    className={`
+                                        relative
+                                        flex
+                                        h-[50px]
+                                        items-center
+                                        rounded-[5px]
+                                        border
+                                        bg-[#10171b]
+                                        transition
+                                        ${errors.name
+                                            ? "border-red-500/70"
+                                            : "border-white/[0.08] focus-within:border-[#10aaa9]/60"
+                                        }
+                                    `}
+                                >
+
                                     <User
-                                        size={19}
-                                        className={`absolute left-4 top-1/2 -translate-y-1/2 ${errors.name
+                                        size={17}
+                                        strokeWidth={1.7}
+                                        className={`
+                                            absolute
+                                            left-4
+                                            top-1/2
+                                            -translate-y-1/2
+                                            ${errors.name
                                                 ? "text-red-400"
-                                                : "text-[#909b9f]"
-                                            }`}
+                                                : "text-[#68747a]"
+                                            }
+                                        `}
                                     />
 
                                     <input
@@ -223,33 +725,87 @@ export default function Signup() {
                                         onChange={handleChange}
                                         placeholder="Enter your name"
                                         autoComplete="name"
-                                        className={`h-[54px] w-full rounded-[10px] border bg-[#11181c] pl-[56px] pr-5 text-[14px] text-white outline-none transition placeholder:text-[#899398] hover:border-white/[0.16] focus:bg-[#131c20] ${errors.name
-                                                ? "border-red-500/70 focus:border-red-500"
-                                                : "border-white/[0.10] focus:border-[#10aaa9]"
-                                            }`}
+                                        disabled={isLoading}
+                                        className="
+                                            h-full
+                                            w-full
+                                            min-w-0
+                                            bg-transparent
+                                            pl-[48px]
+                                            pr-4
+                                            text-[13px]
+                                            text-white
+                                            outline-none
+                                            placeholder:text-[#566168]
+                                            disabled:cursor-not-allowed
+                                            disabled:opacity-50
+                                        "
                                     />
+
                                 </div>
 
                                 {errors.name && (
-                                    <p className="mt-1.5 text-[12px] text-red-400">
+                                    <p
+                                        className="
+                                            mt-1.5
+                                            text-[11px]
+                                            text-red-400
+                                        "
+                                    >
                                         {errors.name}
                                     </p>
                                 )}
+
                             </div>
 
-                            {/* Email */}
+                            {/* =================================================
+                                EMAIL
+                            ================================================= */}
+
                             <div>
-                                <label className="mb-2.5 block text-[14px] font-medium text-white">
+
+                                <label
+                                    className="
+                                        mb-2
+                                        block
+                                        text-[12px]
+                                        font-medium
+                                        text-[#b2b9bc]
+                                    "
+                                >
                                     Email
                                 </label>
 
-                                <div className="relative">
+                                <div
+                                    className={`
+                                        relative
+                                        flex
+                                        h-[50px]
+                                        items-center
+                                        rounded-[5px]
+                                        border
+                                        bg-[#10171b]
+                                        transition
+                                        ${errors.email
+                                            ? "border-red-500/70"
+                                            : "border-white/[0.08] focus-within:border-[#10aaa9]/60"
+                                        }
+                                    `}
+                                >
+
                                     <Mail
-                                        size={19}
-                                        className={`absolute left-4 top-1/2 -translate-y-1/2 ${errors.email
+                                        size={17}
+                                        strokeWidth={1.7}
+                                        className={`
+                                            absolute
+                                            left-4
+                                            top-1/2
+                                            -translate-y-1/2
+                                            ${errors.email
                                                 ? "text-red-400"
-                                                : "text-[#909b9f]"
-                                            }`}
+                                                : "text-[#68747a]"
+                                            }
+                                        `}
                                     />
 
                                     <input
@@ -259,33 +815,87 @@ export default function Signup() {
                                         onChange={handleChange}
                                         placeholder="Enter your email"
                                         autoComplete="email"
-                                        className={`h-[54px] w-full rounded-[10px] border bg-[#11181c] pl-[56px] pr-5 text-[14px] text-white outline-none transition placeholder:text-[#899398] hover:border-white/[0.16] focus:bg-[#131c20] ${errors.email
-                                                ? "border-red-500/70 focus:border-red-500"
-                                                : "border-white/[0.10] focus:border-[#10aaa9]"
-                                            }`}
+                                        disabled={isLoading}
+                                        className="
+                                            h-full
+                                            w-full
+                                            min-w-0
+                                            bg-transparent
+                                            pl-[48px]
+                                            pr-4
+                                            text-[13px]
+                                            text-white
+                                            outline-none
+                                            placeholder:text-[#566168]
+                                            disabled:cursor-not-allowed
+                                            disabled:opacity-50
+                                        "
                                     />
+
                                 </div>
 
                                 {errors.email && (
-                                    <p className="mt-1.5 text-[12px] text-red-400">
+                                    <p
+                                        className="
+                                            mt-1.5
+                                            text-[11px]
+                                            text-red-400
+                                        "
+                                    >
                                         {errors.email}
                                     </p>
                                 )}
+
                             </div>
 
-                            {/* Password */}
+                            {/* =================================================
+                                PASSWORD
+                            ================================================= */}
+
                             <div>
-                                <label className="mb-2.5 block text-[14px] font-medium text-white">
+
+                                <label
+                                    className="
+                                        mb-2
+                                        block
+                                        text-[12px]
+                                        font-medium
+                                        text-[#b2b9bc]
+                                    "
+                                >
                                     Password
                                 </label>
 
-                                <div className="relative">
+                                <div
+                                    className={`
+                                        relative
+                                        flex
+                                        h-[50px]
+                                        items-center
+                                        rounded-[5px]
+                                        border
+                                        bg-[#10171b]
+                                        transition
+                                        ${errors.password
+                                            ? "border-red-500/70"
+                                            : "border-white/[0.08] focus-within:border-[#10aaa9]/60"
+                                        }
+                                    `}
+                                >
+
                                     <LockKeyhole
-                                        size={19}
-                                        className={`absolute left-4 top-1/2 -translate-y-1/2 ${errors.password
+                                        size={17}
+                                        strokeWidth={1.7}
+                                        className={`
+                                            absolute
+                                            left-4
+                                            top-1/2
+                                            -translate-y-1/2
+                                            ${errors.password
                                                 ? "text-red-400"
-                                                : "text-[#909b9f]"
-                                            }`}
+                                                : "text-[#68747a]"
+                                            }
+                                        `}
                                     />
 
                                     <input
@@ -299,19 +909,48 @@ export default function Signup() {
                                         onChange={handleChange}
                                         placeholder="Create a password"
                                         autoComplete="new-password"
-                                        className={`h-[54px] w-full rounded-[10px] border bg-[#11181c] pl-[56px] pr-[56px] text-[14px] text-white outline-none transition placeholder:text-[#899398] hover:border-white/[0.16] focus:bg-[#131c20] ${errors.password
-                                                ? "border-red-500/70 focus:border-red-500"
-                                                : "border-white/[0.10] focus:border-[#10aaa9]"
-                                            }`}
+                                        disabled={isLoading}
+                                        className="
+                                            h-full
+                                            w-full
+                                            min-w-0
+                                            bg-transparent
+                                            pl-[48px]
+                                            pr-[48px]
+                                            text-[13px]
+                                            text-white
+                                            outline-none
+                                            placeholder:text-[#566168]
+                                            disabled:cursor-not-allowed
+                                            disabled:opacity-50
+                                        "
                                     />
 
-                                    {/* Show / Hide Password */}
                                     <button
                                         type="button"
                                         onClick={() =>
-                                            setShowPassword(!showPassword)
+                                            setShowPassword(
+                                                !showPassword
+                                            )
                                         }
-                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-[#909b9f] transition hover:text-white"
+                                        disabled={isLoading}
+                                        className="
+                                            absolute
+                                            right-3
+                                            top-1/2
+                                            flex
+                                            h-7
+                                            w-7
+                                            -translate-y-1/2
+                                            items-center
+                                            justify-center
+                                            rounded-full
+                                            text-[#68747a]
+                                            transition
+                                            hover:bg-white/[0.05]
+                                            hover:text-white
+                                            disabled:opacity-40
+                                        "
                                         aria-label={
                                             showPassword
                                                 ? "Hide password"
@@ -319,33 +958,76 @@ export default function Signup() {
                                         }
                                     >
                                         {showPassword ? (
-                                            <EyeOff size={20} />
+                                            <EyeOff size={16} />
                                         ) : (
-                                            <Eye size={20} />
+                                            <Eye size={16} />
                                         )}
                                     </button>
+
                                 </div>
 
                                 {errors.password && (
-                                    <p className="mt-1.5 text-[12px] text-red-400">
+                                    <p
+                                        className="
+                                            mt-1.5
+                                            text-[11px]
+                                            text-red-400
+                                        "
+                                    >
                                         {errors.password}
                                     </p>
                                 )}
+
                             </div>
 
-                            {/* Confirm Password */}
+                            {/* =================================================
+                                CONFIRM PASSWORD
+                            ================================================= */}
+
                             <div>
-                                <label className="mb-2.5 block text-[14px] font-medium text-white">
+
+                                <label
+                                    className="
+                                        mb-2
+                                        block
+                                        text-[12px]
+                                        font-medium
+                                        text-[#b2b9bc]
+                                    "
+                                >
                                     Confirm password
                                 </label>
 
-                                <div className="relative">
+                                <div
+                                    className={`
+                                        relative
+                                        flex
+                                        h-[50px]
+                                        items-center
+                                        rounded-[5px]
+                                        border
+                                        bg-[#10171b]
+                                        transition
+                                        ${errors.confirmPassword
+                                            ? "border-red-500/70"
+                                            : "border-white/[0.08] focus-within:border-[#10aaa9]/60"
+                                        }
+                                    `}
+                                >
+
                                     <LockKeyhole
-                                        size={19}
-                                        className={`absolute left-4 top-1/2 -translate-y-1/2 ${errors.confirmPassword
+                                        size={17}
+                                        strokeWidth={1.7}
+                                        className={`
+                                            absolute
+                                            left-4
+                                            top-1/2
+                                            -translate-y-1/2
+                                            ${errors.confirmPassword
                                                 ? "text-red-400"
-                                                : "text-[#909b9f]"
-                                            }`}
+                                                : "text-[#68747a]"
+                                            }
+                                        `}
                                     />
 
                                     <input
@@ -355,17 +1037,29 @@ export default function Signup() {
                                                 : "password"
                                         }
                                         name="confirmPassword"
-                                        value={formData.confirmPassword}
+                                        value={
+                                            formData.confirmPassword
+                                        }
                                         onChange={handleChange}
                                         placeholder="Confirm your password"
                                         autoComplete="new-password"
-                                        className={`h-[54px] w-full rounded-[10px] border bg-[#11181c] pl-[56px] pr-[56px] text-[14px] text-white outline-none transition placeholder:text-[#899398] hover:border-white/[0.16] focus:bg-[#131c20] ${errors.confirmPassword
-                                                ? "border-red-500/70 focus:border-red-500"
-                                                : "border-white/[0.10] focus:border-[#10aaa9]"
-                                            }`}
+                                        disabled={isLoading}
+                                        className="
+                                            h-full
+                                            w-full
+                                            min-w-0
+                                            bg-transparent
+                                            pl-[48px]
+                                            pr-[48px]
+                                            text-[13px]
+                                            text-white
+                                            outline-none
+                                            placeholder:text-[#566168]
+                                            disabled:cursor-not-allowed
+                                            disabled:opacity-50
+                                        "
                                     />
 
-                                    {/* Show / Hide Confirm Password */}
                                     <button
                                         type="button"
                                         onClick={() =>
@@ -373,7 +1067,24 @@ export default function Signup() {
                                                 !showConfirmPassword
                                             )
                                         }
-                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-[#909b9f] transition hover:text-white"
+                                        disabled={isLoading}
+                                        className="
+                                            absolute
+                                            right-3
+                                            top-1/2
+                                            flex
+                                            h-7
+                                            w-7
+                                            -translate-y-1/2
+                                            items-center
+                                            justify-center
+                                            rounded-full
+                                            text-[#68747a]
+                                            transition
+                                            hover:bg-white/[0.05]
+                                            hover:text-white
+                                            disabled:opacity-40
+                                        "
                                         aria-label={
                                             showConfirmPassword
                                                 ? "Hide confirm password"
@@ -381,87 +1092,262 @@ export default function Signup() {
                                         }
                                     >
                                         {showConfirmPassword ? (
-                                            <EyeOff size={20} />
+                                            <EyeOff size={16} />
                                         ) : (
-                                            <Eye size={20} />
+                                            <Eye size={16} />
                                         )}
                                     </button>
+
                                 </div>
 
                                 {errors.confirmPassword && (
-                                    <p className="mt-1.5 text-[12px] text-red-400">
+                                    <p
+                                        className="
+                                            mt-1.5
+                                            text-[11px]
+                                            text-red-400
+                                        "
+                                    >
                                         {errors.confirmPassword}
                                     </p>
                                 )}
+
                             </div>
 
-                            {/* Terms */}
+                            {/* =================================================
+                                TERMS
+                            ================================================= */}
+
                             <div>
-                                <label className="flex cursor-pointer items-start gap-2.5 pt-1">
+
+                                <label
+                                    className="
+                                        flex
+                                        cursor-pointer
+                                        items-start
+                                        gap-2.5
+                                        pt-1
+                                    "
+                                >
+
                                     <input
                                         type="checkbox"
                                         name="terms"
                                         checked={formData.terms}
                                         onChange={handleChange}
-                                        className="mt-[2px] h-4 w-4 shrink-0 accent-[#10aaa9]"
+                                        disabled={isLoading}
+                                        className="
+                                            mt-[2px]
+                                            h-4
+                                            w-4
+                                            shrink-0
+                                            accent-[#10aaa9]
+                                        "
                                     />
 
-                                    <span className="text-[11px] leading-5 text-[#7f8a90]">
+                                    <span
+                                        className="
+                                            text-[11px]
+                                            leading-5
+                                            text-[#7f8a90]
+                                        "
+                                    >
                                         I agree to the{" "}
+
                                         <button
                                             type="button"
-                                            className="text-[#10aaa9] hover:text-[#16c7c4]"
+                                            className="
+                                                text-[#10aaa9]
+                                                transition
+                                                hover:text-[#16c7c4]
+                                            "
                                         >
                                             Terms of Service
                                         </button>{" "}
+
                                         and{" "}
+
                                         <button
                                             type="button"
-                                            className="text-[#10aaa9] hover:text-[#16c7c4]"
+                                            className="
+                                                text-[#10aaa9]
+                                                transition
+                                                hover:text-[#16c7c4]
+                                            "
                                         >
                                             Privacy Policy
                                         </button>
                                     </span>
+
                                 </label>
 
                                 {errors.terms && (
-                                    <p className="mt-1.5 text-[12px] text-red-400">
+                                    <p
+                                        className="
+                                            mt-1.5
+                                            text-[11px]
+                                            text-red-400
+                                        "
+                                    >
                                         {errors.terms}
                                     </p>
                                 )}
+
                             </div>
 
-                            {/* Create Account */}
+                            {/* =================================================
+                                CREATE ACCOUNT
+                            ================================================= */}
+
                             <button
                                 type="submit"
-                                className="h-[58px] w-full rounded-[10px] bg-[#10aaa9] text-[15px] font-semibold text-white shadow-[0_8px_30px_rgba(16,170,169,0.14)] transition hover:bg-[#12bdbc] active:scale-[0.99]"
+                                disabled={isLoading}
+                                className="
+                                    flex
+                                    h-[50px]
+                                    w-full
+                                    items-center
+                                    justify-center
+                                    gap-2
+                                    rounded-[5px]
+                                    bg-[#10aaa9]
+                                    text-[13px]
+                                    font-semibold
+                                    text-white
+                                    shadow-[0_8px_30px_rgba(16,170,169,0.12)]
+                                    transition-all
+                                    duration-200
+                                    hover:bg-[#12b9b8]
+                                    hover:shadow-[0_10px_35px_rgba(16,170,169,0.18)]
+                                    active:scale-[0.99]
+                                    disabled:cursor-not-allowed
+                                    disabled:opacity-60
+                                "
                             >
-                                Create Account
+
+                                {isLoading ? (
+                                    <>
+                                        <span
+                                            className="
+                                                h-4
+                                                w-4
+                                                animate-spin
+                                                rounded-full
+                                                border-2
+                                                border-white/30
+                                                border-t-white
+                                            "
+                                        />
+
+                                        <span>
+                                            Creating account...
+                                        </span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span>
+                                            Create Account
+                                        </span>
+
+                                        <ArrowLeft
+                                            size={0}
+                                            className="hidden"
+                                        />
+                                    </>
+                                )}
+
                             </button>
+
                         </form>
 
-                        {/* ================= DIVIDER ================= */}
-                        <div className="my-6 flex items-center gap-4">
-                            <div className="h-px flex-1 bg-white/[0.10]" />
+                        {/* =================================================
+                            DIVIDER
+                        ================================================= */}
 
-                            <span className="whitespace-nowrap text-[13px] text-[#8f999d]">
-                                or continue with
+                        <div
+                            className="
+                                my-6
+                                flex
+                                items-center
+                                gap-4
+                            "
+                        >
+
+                            <div
+                                className="
+                                    h-px
+                                    flex-1
+                                    bg-white/[0.10]
+                                "
+                            />
+
+                            <span
+                                className="
+                                    whitespace-nowrap
+                                    text-[10px]
+                                    uppercase
+                                    tracking-[0.15em]
+                                    text-[#59646a]
+                                "
+                            >
+                                Or continue with
                             </span>
 
-                            <div className="h-px flex-1 bg-white/[0.10]" />
+                            <div
+                                className="
+                                    h-px
+                                    flex-1
+                                    bg-white/[0.10]
+                                "
+                            />
+
                         </div>
 
-                        {/* ================= SOCIAL LOGIN ================= */}
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {/* =================================================
+                            SOCIAL LOGIN
+                        ================================================= */}
 
-                            {/* Google */}
+                        <div
+                            className="
+                                grid
+                                grid-cols-1
+                                gap-3
+                                sm:grid-cols-2
+                            "
+                        >
+
+                            {/* =================================================
+                                GOOGLE
+                            ================================================= */}
+
                             <button
                                 type="button"
-                                className="flex h-[54px] items-center justify-center gap-3 rounded-[10px] border border-white/[0.10] bg-[#11181c] text-[13px] font-medium text-white transition hover:border-white/[0.18] hover:bg-[#151e22]"
+                                onClick={
+                                    handleGoogleSignup
+                                }
+                                className="
+                                    flex
+                                    h-[48px]
+                                    items-center
+                                    justify-center
+                                    gap-2.5
+                                    rounded-[5px]
+                                    border
+                                    border-white/[0.08]
+                                    bg-[#10171b]
+                                    text-[12px]
+                                    font-medium
+                                    text-[#c5cbce]
+                                    transition
+                                    hover:border-white/[0.14]
+                                    hover:bg-[#141d21]
+                                    hover:text-white
+                                "
                             >
+
                                 <svg
-                                    width="20"
-                                    height="20"
+                                    width="18"
+                                    height="18"
                                     viewBox="0 0 24 24"
                                     fill="none"
                                     xmlns="http://www.w3.org/2000/svg"
@@ -490,14 +1376,38 @@ export default function Signup() {
                                 Continue with Google
                             </button>
 
-                            {/* Facebook */}
+                            {/* =================================================
+                                FACEBOOK
+                            ================================================= */}
+
                             <button
                                 type="button"
-                                className="flex h-[54px] items-center justify-center gap-3 rounded-[10px] border border-white/[0.10] bg-[#11181c] text-[13px] font-medium text-white transition hover:border-white/[0.18] hover:bg-[#151e22]"
+                                onClick={
+                                    handleFacebookSignup
+                                }
+                                className="
+                                    flex
+                                    h-[48px]
+                                    items-center
+                                    justify-center
+                                    gap-2.5
+                                    rounded-[5px]
+                                    border
+                                    border-white/[0.08]
+                                    bg-[#10171b]
+                                    text-[12px]
+                                    font-medium
+                                    text-[#c5cbce]
+                                    transition
+                                    hover:border-white/[0.14]
+                                    hover:bg-[#141d21]
+                                    hover:text-white
+                                "
                             >
+
                                 <svg
-                                    width="20"
-                                    height="20"
+                                    width="18"
+                                    height="18"
                                     viewBox="0 0 24 24"
                                     fill="none"
                                     xmlns="http://www.w3.org/2000/svg"
@@ -515,14 +1425,31 @@ export default function Signup() {
 
                                 Continue with Facebook
                             </button>
+
                         </div>
 
-                        {/* ================= LOGIN LINK ================= */}
-                        <div className="mt-6 text-center text-[13px] text-[#a4adb1]">
+                        {/* =================================================
+                            LOGIN LINK
+                        ================================================= */}
+
+                        <div
+                            className="
+                                mt-6
+                                text-center
+                                text-[12px]
+                                text-[#69757b]
+                            "
+                        >
                             Already have an account?{" "}
+
                             <Link
                                 to="/login"
-                                className="font-medium text-[#10aaa9] transition hover:text-[#16c7c4]"
+                                className="
+                                    font-medium
+                                    text-[#10aaa9]
+                                    transition
+                                    hover:text-[#12c1bf]
+                                "
                             >
                                 Log in
                             </Link>
@@ -531,6 +1458,19 @@ export default function Signup() {
                     </div>
                 </div>
             </div>
+
+            {/* =================================================
+                CENTER TOAST
+            ================================================= */}
+
+            {toast && (
+                <Toast
+                    type={toast.type}
+                    message={toast.message}
+                    onClose={() => setToast(null)}
+                />
+            )}
+
         </div>
     );
 }

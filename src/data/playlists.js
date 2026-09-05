@@ -1,7 +1,31 @@
 export const playlists = [
-    { id: 1, title: "Favorite Songs", songs: "128 songs", image: "/src/assets/images/playlist-favorite.png" },
-    { id: 2, title: "Chill Vibes", songs: "80 songs", image: "/src/assets/images/playlist-favorite.png" },
-    { id: 3, title: "Workout Mix", songs: "60 songs", image: "/src/assets/images/playlist-favorite.png" },
-    { id: 4, title: "Classic Hits", songs: "90 songs", image: "/src/assets/images/playlist-favorite.png" },
-    { id: 5, title: "Focus Time", songs: "70 songs", image: "/src/assets/images/playlist-favorite.png" },
+    {
+        id: "chill-vibes",
+        title: "Chill Vibes",
+        description: "Relax and enjoy your favorite melodies.",
+        image: "/src/assets/images/playlist-favorite.png",
+    },
+
+    {
+        id: "workout-mix",
+        title: "Workout Mix",
+        description: "High-energy tracks for your workout.",
+        image: "/src/assets/images/playlist-favorite.png",
+    },
+
+    {
+        id: "classic-hits",
+        title: "Classic Hits",
+        description: "Timeless songs you will always love.",
+        image: "/src/assets/images/playlist-favorite.png",
+    },
+
+    {
+        id: "focus-time",
+        title: "Focus Time",
+        description: "Music to help you stay focused.",
+        image: "/src/assets/images/playlist-favorite.png",
+    },
 ];
+
+export default playlists;
