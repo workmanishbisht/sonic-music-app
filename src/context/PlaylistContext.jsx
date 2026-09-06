@@ -7,6 +7,8 @@ import {
 
 import {
     addDoc,
+    arrayRemove,
+    arrayUnion,
     collection,
     deleteDoc,
     doc,
@@ -35,7 +37,6 @@ export function PlaylistProvider({ children }) {
             return;
         }
 
-        // User logged out
         if (!user) {
             setPlaylists([]);
             setLoading(false);
@@ -61,7 +62,6 @@ export function PlaylistProvider({ children }) {
                     })
                 );
 
-                // Latest created playlist first
                 userPlaylists.sort((a, b) => {
                     const aTime =
                         a.createdAt?.seconds || 0;
@@ -97,6 +97,7 @@ export function PlaylistProvider({ children }) {
         name,
         description = "",
         image = "/src/assets/images/playlist-favorite.png",
+        songId = null,
     }) => {
         if (!user) {
             throw new Error(
@@ -121,9 +122,14 @@ export function PlaylistProvider({ children }) {
 
         const playlistData = {
             name: trimmedName,
-            description: description.trim(),
+            description: description?.trim() || "",
             image,
-            songs: [],
+            songs:
+                songId !== null &&
+                songId !== undefined &&
+                songId !== ""
+                    ? [songId]
+                    : [],
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         };
@@ -227,7 +233,13 @@ export function PlaylistProvider({ children }) {
         playlistId,
         songId
     ) => {
-        if (!user || !playlistId || !songId) {
+        if (
+            !user ||
+            !playlistId ||
+            songId === null ||
+            songId === undefined ||
+            songId === ""
+        ) {
             return;
         }
 
@@ -241,35 +253,18 @@ export function PlaylistProvider({ children }) {
             );
         }
 
-        const existingSongs = Array.isArray(
-            playlist.songs
-        )
-            ? playlist.songs
-            : [];
-
-        const songIdString = String(songId);
-
-        // Don't add duplicate songs
-        if (
-            existingSongs.some(
-                (id) =>
-                    String(id) === songIdString
-            )
-        ) {
-            return;
-        }
-
-        const updatedSongs = [
-            ...existingSongs,
-            songId,
-        ];
-
-        await updatePlaylist(
-            playlistId,
-            {
-                songs: updatedSongs,
-            }
+        const playlistRef = doc(
+            db,
+            "users",
+            user.uid,
+            "playlists",
+            playlistId
         );
+
+        await updateDoc(playlistRef, {
+            songs: arrayUnion(songId),
+            updatedAt: serverTimestamp(),
+        });
     };
 
     // ==========================================
@@ -280,7 +275,13 @@ export function PlaylistProvider({ children }) {
         playlistId,
         songId
     ) => {
-        if (!user || !playlistId || !songId) {
+        if (
+            !user ||
+            !playlistId ||
+            songId === null ||
+            songId === undefined ||
+            songId === ""
+        ) {
             return;
         }
 
@@ -294,25 +295,18 @@ export function PlaylistProvider({ children }) {
             );
         }
 
-        const existingSongs = Array.isArray(
-            playlist.songs
-        )
-            ? playlist.songs
-            : [];
-
-        const updatedSongs =
-            existingSongs.filter(
-                (id) =>
-                    String(id) !==
-                    String(songId)
-            );
-
-        await updatePlaylist(
-            playlistId,
-            {
-                songs: updatedSongs,
-            }
+        const playlistRef = doc(
+            db,
+            "users",
+            user.uid,
+            "playlists",
+            playlistId
         );
+
+        await updateDoc(playlistRef, {
+            songs: arrayRemove(songId),
+            updatedAt: serverTimestamp(),
+        });
     };
 
     // ==========================================
@@ -331,10 +325,11 @@ export function PlaylistProvider({ children }) {
             return false;
         }
 
-        const playlistSongs =
-            Array.isArray(playlist.songs)
-                ? playlist.songs
-                : [];
+        const playlistSongs = Array.isArray(
+            playlist.songs
+        )
+            ? playlist.songs
+            : [];
 
         return playlistSongs.some(
             (id) =>
@@ -379,9 +374,7 @@ export function PlaylistProvider({ children }) {
     };
 
     return (
-        <PlaylistContext.Provider
-            value={value}
-        >
+        <PlaylistContext.Provider value={value}>
             {children}
         </PlaylistContext.Provider>
     );

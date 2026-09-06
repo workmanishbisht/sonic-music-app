@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 import {
     Heart,
     Pause,
@@ -11,6 +13,10 @@ import {
 } from "lucide-react";
 
 import { usePlayer } from "@/context/PlayerContext";
+import { useAuth } from "@/context/AuthContext";
+import { db } from "@/lib/firebase";
+import { deleteDoc, doc, onSnapshot, setDoc } from "firebase/firestore";
+import LoginRequiredModal from "@/components/player/LoginRequiredModal";
 
 function formatTime(seconds) {
     if (!seconds || Number.isNaN(seconds)) {
@@ -46,6 +52,91 @@ export default function MusicPlayer() {
         toggleRepeat,
     } = usePlayer();
 
+    const { user, loading: authLoading } = useAuth();
+
+    const [isFavorite, setIsFavorite] = useState(false);
+    const [favoriteLoading, setFavoriteLoading] = useState(false);
+    const [showLoginModal, setShowLoginModal] = useState(false);
+
+    // ==========================================
+    // FIRESTORE FAVORITE LISTENER
+    // ==========================================
+
+    useEffect(() => {
+        if (authLoading) return;
+
+        if (!user || !currentSong?.id) {
+            setIsFavorite(false);
+            return;
+        }
+
+        const favoriteRef = doc(
+            db,
+            "users",
+            user.uid,
+            "favorites",
+            String(currentSong.id)
+        );
+
+        const unsubscribe = onSnapshot(
+            favoriteRef,
+            (snapshot) => {
+                setIsFavorite(snapshot.exists());
+            },
+            (error) => {
+                console.error("Player favorite listener error:", error);
+                setIsFavorite(false);
+            }
+        );
+
+        return () => unsubscribe();
+    }, [user, authLoading, currentSong?.id]);
+
+    // ==========================================
+    // LIKE / UNLIKE CURRENT SONG
+    // ==========================================
+
+    const handleLike = async () => {
+        if (!user) {
+            setShowLoginModal(true);
+            return;
+        }
+
+        if (!currentSong?.id || favoriteLoading) {
+            return;
+        }
+
+        setFavoriteLoading(true);
+
+        try {
+            const favoriteRef = doc(
+                db,
+                "users",
+                user.uid,
+                "favorites",
+                String(currentSong.id)
+            );
+
+            if (isFavorite) {
+                await deleteDoc(favoriteRef);
+            } else {
+                await setDoc(favoriteRef, {
+                    id: currentSong.id,
+                    title: currentSong.title || "",
+                    artist: currentSong.artist || "",
+                    album: currentSong.album || "",
+                    image: currentSong.image || "",
+                    audio: currentSong.audio || "",
+                    createdAt: new Date().toISOString(),
+                });
+            }
+        } catch (error) {
+            console.error("Player favorite update error:", error);
+        } finally {
+            setFavoriteLoading(false);
+        }
+    };
+
     // Player tabhi show hoga jab song select hoga
     if (!currentSong) {
         return null;
@@ -57,7 +148,8 @@ export default function MusicPlayer() {
             : 0;
 
     return (
-        <div
+        <>
+            <div
             className="
                 fixed bottom-0 left-0 right-0 z-[100]
                 border-t border-white/[0.07]
@@ -168,22 +260,37 @@ export default function MusicPlayer() {
 
                     <button
                         type="button"
-                        aria-label="Like song"
-                        className="
+                        onClick={handleLike}
+                        disabled={favoriteLoading}
+                        aria-label={
+                            isFavorite
+                                ? `Remove ${currentSong.title} from favorites`
+                                : `Like ${currentSong.title}`
+                        }
+                        title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                        className={`
                             hidden h-8 w-8
                             shrink-0
                             items-center justify-center
                             rounded-full
-                            text-[#7d898f]
                             transition-all
-                            hover:bg-white/[0.05]
-                            hover:text-[#10aaa9]
                             sm:flex
-                        "
+                            ${
+                                isFavorite
+                                    ? "text-[#10aaa9]"
+                                    : "text-[#7d898f] hover:text-[#10aaa9]"
+                            }
+                            ${
+                                favoriteLoading
+                                    ? "cursor-wait opacity-60"
+                                    : "hover:bg-white/[0.05]"
+                            }
+                        `}
                     >
                         <Heart
                             size={17}
                             strokeWidth={1.8}
+                            fill={isFavorite ? "currentColor" : "none"}
                         />
                     </button>
                 </div>
@@ -629,6 +736,13 @@ export default function MusicPlayer() {
                     />
                 </div>
             </div>
-        </div>
+            </div>
+
+            {showLoginModal && (
+                <LoginRequiredModal
+                    onClose={() => setShowLoginModal(false)}
+                />
+            )}
+        </>
     );
 }

@@ -12,7 +12,12 @@ import {
     X,
 } from "lucide-react";
 
-import { signInWithEmailAndPassword } from "firebase/auth";
+import {
+    signInWithEmailAndPassword,
+    signInWithPopup,
+    GoogleAuthProvider,
+    FacebookAuthProvider,
+} from "firebase/auth";
 import { auth } from "@/lib/firebase";
 
 /* =========================================================
@@ -254,15 +259,9 @@ export default function Login() {
 
             const user =
                 userCredential.user;
-
-            console.log(
-                "Firebase Login Successful:",
-                user
-            );
-
             /* =================================================
-               LOCAL STORAGE
-            ================================================= */
+                           LOCAL STORAGE
+                        ================================================= */
 
             localStorage.setItem(
                 "sonicLoggedIn",
@@ -307,11 +306,6 @@ export default function Login() {
             }, 1200);
 
         } catch (error) {
-            console.error(
-                "Firebase Login Error:",
-                error
-            );
-
             const message =
                 getFirebaseErrorMessage(
                     error
@@ -382,24 +376,116 @@ export default function Login() {
        GOOGLE LOGIN
     ===================================================== */
 
-    const handleGoogleLogin = () => {
-        setToast({
-            type: "error",
-            message:
-                "Google login will be available soon.",
-        });
+    const handleGoogleLogin = async () => {
+        setFirebaseError("");
+        setToast(null);
+
+        try {
+            setIsLoading(true);
+
+            const provider = new GoogleAuthProvider();
+            provider.setCustomParameters({
+                prompt: "select_account",
+            });
+
+            const userCredential = await signInWithPopup(
+                auth,
+                provider
+            );
+
+            const user = userCredential.user;
+
+            localStorage.setItem("sonicLoggedIn", "true");
+            localStorage.setItem(
+                "sonicUser",
+                JSON.stringify({
+                    uid: user.uid,
+                    name:
+                        user.displayName ||
+                        user.email?.split("@")[0] ||
+                        "Sonic User",
+                    email: user.email || "",
+                    photoURL: user.photoURL || "",
+                })
+            );
+
+            setToast({
+                type: "success",
+                message: "You're logged in successfully.",
+            });
+
+            setTimeout(() => {
+                navigate("/");
+            }, 1200);
+        } catch (error) {
+            const message = getSocialAuthErrorMessage(error);
+
+            setFirebaseError(message);
+            setToast({
+                type: "error",
+                message,
+            });
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     /* =====================================================
        FACEBOOK LOGIN
     ===================================================== */
 
-    const handleFacebookLogin = () => {
-        setToast({
-            type: "error",
-            message:
-                "Facebook login will be available soon.",
-        });
+    const handleFacebookLogin = async () => {
+        setFirebaseError("");
+        setToast(null);
+
+        try {
+            setIsLoading(true);
+
+            const provider = new FacebookAuthProvider();
+            provider.setCustomParameters({
+                display: "popup",
+            });
+
+            const userCredential = await signInWithPopup(
+                auth,
+                provider
+            );
+
+            const user = userCredential.user;
+
+            localStorage.setItem("sonicLoggedIn", "true");
+            localStorage.setItem(
+                "sonicUser",
+                JSON.stringify({
+                    uid: user.uid,
+                    name:
+                        user.displayName ||
+                        user.email?.split("@")[0] ||
+                        "Sonic User",
+                    email: user.email || "",
+                    photoURL: user.photoURL || "",
+                })
+            );
+
+            setToast({
+                type: "success",
+                message: "You're logged in successfully.",
+            });
+
+            setTimeout(() => {
+                navigate("/");
+            }, 1200);
+        } catch (error) {
+            const message = getSocialAuthErrorMessage(error);
+
+            setFirebaseError(message);
+            setToast({
+                type: "error",
+                message,
+            });
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     /* =====================================================
@@ -408,6 +494,24 @@ export default function Login() {
 
     return (
         <div className="min-h-screen bg-[#070c0f] text-white">
+            <style>{`
+                input:-webkit-autofill,
+                input:-webkit-autofill:hover,
+                input:-webkit-autofill:focus,
+                input:-webkit-autofill:active {
+                    -webkit-box-shadow: 0 0 0 1000px #10171b inset !important;
+                    box-shadow: 0 0 0 1000px #10171b inset !important;
+                    -webkit-text-fill-color: #ffffff !important;
+                    caret-color: #ffffff !important;
+                    border: none !important;
+                    transition: background-color 9999s ease-in-out 0s !important;
+                }
+
+                input:-moz-autofill {
+                    background-color: #10171b !important;
+                    color: #ffffff !important;
+                }
+            `}</style>
 
             <div className="grid min-h-screen lg:grid-cols-2">
 

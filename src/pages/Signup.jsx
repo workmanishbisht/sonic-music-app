@@ -15,6 +15,9 @@ import {
 import {
     createUserWithEmailAndPassword,
     updateProfile,
+    signInWithPopup,
+    GoogleAuthProvider,
+    FacebookAuthProvider,
 } from "firebase/auth";
 
 import { auth } from "@/lib/firebase";
@@ -387,24 +390,120 @@ export default function Signup() {
        GOOGLE SIGNUP
     ===================================================== */
 
-    const handleGoogleSignup = () => {
-        setToast({
-            type: "error",
-            message:
-                "Google signup will be available soon.",
-        });
+    const handleGoogleSignup = async () => {
+        setFirebaseError("");
+        setToast(null);
+
+        try {
+            setIsLoading(true);
+
+            const provider = new GoogleAuthProvider();
+            provider.setCustomParameters({
+                prompt: "select_account",
+            });
+
+            const userCredential = await signInWithPopup(
+                auth,
+                provider
+            );
+
+            const user = userCredential.user;
+
+            localStorage.setItem("sonicLoggedIn", "true");
+            localStorage.setItem(
+                "sonicUser",
+                JSON.stringify({
+                    uid: user.uid,
+                    name:
+                        user.displayName ||
+                        user.email?.split("@")[0] ||
+                        "Sonic User",
+                    email: user.email || "",
+                    photoURL: user.photoURL || "",
+                })
+            );
+
+            setToast({
+                type: "success",
+                message: "Your Sonic account is ready.",
+            });
+
+            setTimeout(() => {
+                navigate("/");
+            }, 1200);
+        } catch (error) {
+            console.error("Google Signup Error:", error);
+
+            const message = getSocialAuthErrorMessage(error);
+
+            setFirebaseError(message);
+            setToast({
+                type: "error",
+                message,
+            });
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     /* =====================================================
        FACEBOOK SIGNUP
     ===================================================== */
 
-    const handleFacebookSignup = () => {
-        setToast({
-            type: "error",
-            message:
-                "Facebook signup will be available soon.",
-        });
+    const handleFacebookSignup = async () => {
+        setFirebaseError("");
+        setToast(null);
+
+        try {
+            setIsLoading(true);
+
+            const provider = new FacebookAuthProvider();
+            provider.setCustomParameters({
+                display: "popup",
+            });
+
+            const userCredential = await signInWithPopup(
+                auth,
+                provider
+            );
+
+            const user = userCredential.user;
+
+            localStorage.setItem("sonicLoggedIn", "true");
+            localStorage.setItem(
+                "sonicUser",
+                JSON.stringify({
+                    uid: user.uid,
+                    name:
+                        user.displayName ||
+                        user.email?.split("@")[0] ||
+                        "Sonic User",
+                    email: user.email || "",
+                    photoURL: user.photoURL || "",
+                })
+            );
+
+            setToast({
+                type: "success",
+                message: "Your Sonic account is ready.",
+            });
+
+            setTimeout(() => {
+                navigate("/");
+            }, 1200);
+        } catch (error) {
+            console.error("Facebook Signup Error:", error);
+
+            const message = getSocialAuthErrorMessage(error);
+
+            setFirebaseError(message);
+            setToast({
+                type: "error",
+                message,
+            });
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     /* =====================================================

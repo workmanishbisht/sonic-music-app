@@ -3,15 +3,20 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { PlaylistProvider } from "./context/PlaylistContext";
 import { PlayerProvider } from "./context/PlayerContext";
+
 import MainLayout from "./components/layout/MainLayout";
+
 import Home from "./pages/Home";
 import Discover from "./pages/Discover";
 import Library from "./pages/Library";
 import Radio from "./pages/Radio";
 import Podcasts from "./pages/Podcasts";
+
 import AlbumDetail from "./pages/AlbumDetail";
 import ArtistDetail from "./pages/ArtistDetail";
+import PlaylistDetail from "./pages/PlaylistDetail";
 import Premium from "./pages/Premium";
+import Profile from "./pages/Profile";
 
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -73,10 +78,22 @@ export default function App() {
                                     element={<ArtistDetail />}
                                 />
 
+                                {/* Playlist Detail */}
+                                <Route
+                                    path="/playlist/:playlistId"
+                                    element={<PlaylistDetail />}
+                                />
+
                                 {/* Premium */}
                                 <Route
                                     path="/premium"
                                     element={<Premium />}
+                                />
+
+                                {/* Profile */}
+                                <Route
+                                    path="/profile"
+                                    element={<Profile />}
                                 />
 
                             </Route>
@@ -98,6 +115,7 @@ export default function App() {
                             />
 
                         </Routes>
+
                     </PlayerProvider>
                 </PlaylistProvider>
             </AuthProvider>

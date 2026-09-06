@@ -11,11 +11,13 @@ import {
   Bell,
   LogOut,
   User,
+  UserRound,
   Settings,
   ChevronDown,
   CheckCircle2,
   XCircle,
   X,
+  Menu,
 } from "lucide-react";
 
 import { signOut } from "firebase/auth";
@@ -131,7 +133,7 @@ function Toast({ type = "success", message, onClose }) {
    HEADER
 ========================================================= */
 
-export default function Header() {
+export default function Header({ onMenuClick }) {
   const navigate = useNavigate();
 
   const {
@@ -365,6 +367,19 @@ export default function Header() {
   };
 
   /* =====================================================
+     SOCIAL PROFILE PHOTO
+     Google/Facebook photo only
+  ===================================================== */
+
+  const hasSocialProfilePhoto =
+    !!user?.photoURL &&
+    user?.providerData?.some(
+      (provider) =>
+        provider.providerId === "google.com" ||
+        provider.providerId === "facebook.com"
+    );
+
+  /* =====================================================
      SEARCH
   ===================================================== */
 
@@ -442,6 +457,39 @@ export default function Header() {
                     lg:px-8
                 "
       >
+
+        {/* =================================================
+                    MOBILE MENU TOGGLE
+                ================================================= */}
+        <button
+          type="button"
+          onClick={onMenuClick}
+          aria-label="Open sidebar"
+          className="
+            flex
+            h-10
+            w-10
+            shrink-0
+            items-center
+            justify-center
+            rounded-[4px]
+            border
+            border-white/[0.07]
+            bg-[#141b20]
+            text-[#a6afb4]
+            transition
+            hover:border-white/[0.12]
+            hover:bg-[#182126]
+            hover:text-white
+
+            sm:h-11
+            sm:w-11
+
+            lg:hidden
+          "
+        >
+          <Menu size={19} strokeWidth={1.9} />
+        </button>
 
         {/* =================================================
                     SEARCH
@@ -974,14 +1022,10 @@ export default function Header() {
                                             sm:text-[11px]
                                         "
                   >
-                    {user?.photoURL ? (
+                    {hasSocialProfilePhoto ? (
                       <img
-                        src={
-                          user.photoURL
-                        }
-                        alt={
-                          userName
-                        }
+                        src={user.photoURL}
+                        alt={userName}
                         className="
                                                     h-full
                                                     w-full
@@ -989,9 +1033,11 @@ export default function Header() {
                                                 "
                       />
                     ) : (
-                      getInitials(
-                        userName
-                      )
+                      <UserRound
+                        size={19}
+                        strokeWidth={1.8}
+                        className="text-white"
+                      />
                     )}
                   </div>
 
@@ -1145,13 +1191,8 @@ export default function Header() {
                       <button
                         type="button"
                         onClick={() => {
-                          setIsProfileOpen(
-                            false
-                          );
-
-                          console.log(
-                            "Profile clicked"
-                          );
+                          setIsProfileOpen(false);
+                          navigate("/profile");
                         }}
                         className="
                                                     flex
@@ -1187,13 +1228,7 @@ export default function Header() {
                       <button
                         type="button"
                         onClick={() => {
-                          setIsProfileOpen(
-                            false
-                          );
-
-                          console.log(
-                            "Settings clicked"
-                          );
+                          setIsProfileOpen(false);
                         }}
                         className="
                                                     flex
