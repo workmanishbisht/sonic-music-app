@@ -5,12 +5,17 @@ import { PlaylistProvider } from "./context/PlaylistContext";
 import { PlayerProvider } from "./context/PlayerContext";
 
 import MainLayout from "./components/layout/MainLayout";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 import Home from "./pages/Home";
 import Discover from "./pages/Discover";
 import Library from "./pages/Library";
 import Radio from "./pages/Radio";
 import Podcasts from "./pages/Podcasts";
+
+import Albums from "./pages/Albums";
+import Artists from "./pages/Artists";
+import Songs from "./pages/Songs";
 
 import AlbumDetail from "./pages/AlbumDetail";
 import ArtistDetail from "./pages/ArtistDetail";
@@ -36,6 +41,10 @@ export default function App() {
 
                             <Route element={<MainLayout />}>
 
+                                {/* =================================
+                                    PUBLIC PAGES
+                                ================================= */}
+
                                 {/* Home */}
                                 <Route
                                     path="/"
@@ -46,12 +55,6 @@ export default function App() {
                                 <Route
                                     path="/discover"
                                     element={<Discover />}
-                                />
-
-                                {/* Library */}
-                                <Route
-                                    path="/library"
-                                    element={<Library />}
                                 />
 
                                 {/* Radio */}
@@ -66,6 +69,30 @@ export default function App() {
                                     element={<Podcasts />}
                                 />
 
+                                {/* Premium */}
+                                <Route
+                                    path="/premium"
+                                    element={<Premium />}
+                                />
+
+                                {/* Albums */}
+                                <Route
+                                    path="/albums"
+                                    element={<Albums />}
+                                />
+
+                                {/* Artists */}
+                                <Route
+                                    path="/artists"
+                                    element={<Artists />}
+                                />
+
+                                {/* Songs */}
+                                <Route
+                                    path="/songs"
+                                    element={<Songs />}
+                                />
+
                                 {/* Album Detail */}
                                 <Route
                                     path="/album/:albumId"
@@ -78,22 +105,38 @@ export default function App() {
                                     element={<ArtistDetail />}
                                 />
 
+                                {/* =================================
+                                    PROTECTED PAGES
+                                ================================= */}
+
+                                {/* Library */}
+                                <Route
+                                    path="/library"
+                                    element={
+                                        <ProtectedRoute>
+                                            <Library />
+                                        </ProtectedRoute>
+                                    }
+                                />
+
                                 {/* Playlist Detail */}
                                 <Route
                                     path="/playlist/:playlistId"
-                                    element={<PlaylistDetail />}
-                                />
-
-                                {/* Premium */}
-                                <Route
-                                    path="/premium"
-                                    element={<Premium />}
+                                    element={
+                                        <ProtectedRoute>
+                                            <PlaylistDetail />
+                                        </ProtectedRoute>
+                                    }
                                 />
 
                                 {/* Profile */}
                                 <Route
                                     path="/profile"
-                                    element={<Profile />}
+                                    element={
+                                        <ProtectedRoute>
+                                            <Profile />
+                                        </ProtectedRoute>
+                                    }
                                 />
 
                             </Route>

@@ -1,10 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import favoritePlaylist from "@/assets/images/playlist-favorite.png";
-import chillPlaylist from "@/assets/images/playlist-chill.png";
-import workoutPlaylist from "@/assets/images/playlist-workout.png";
-import classicPlaylist from "@/assets/images/playlist-classic.png";
-import focusPlaylist from "@/assets/images/playlist-focus.png";
 
 import {
     Home,
@@ -24,41 +20,59 @@ import {
 import { usePlaylist } from "@/context/PlaylistContext";
 
 const mainNavigation = [
-    { name: "Home", icon: Home, path: "/" },
-    { name: "Discover", icon: Compass, path: "/discover" },
-    { name: "Library", icon: Library, path: "/library" },
-    { name: "Radio", icon: Radio, path: "/radio" },
-    { name: "Podcasts", icon: Mic2, path: "/podcasts" },
+    {
+        name: "Home",
+        icon: Home,
+        path: "/",
+    },
+    {
+        name: "Discover",
+        icon: Compass,
+        path: "/discover",
+    },
+    {
+        name: "Library",
+        icon: Library,
+        path: "/library",
+    },
+    {
+        name: "Radio",
+        icon: Radio,
+        path: "/radio",
+    },
+    {
+        name: "Podcasts",
+        icon: Mic2,
+        path: "/podcasts",
+    },
 ];
 
 const libraryNavigation = [
-    { name: "Playlists", icon: ListMusic },
-    { name: "Albums", icon: Disc3 },
-    { name: "Artists", icon: Users },
-    { name: "Songs", icon: Music2 },
-    { name: "Downloaded", icon: Download },
-];
-
-const fallbackPlaylists = [
     {
-        name: "Chill Vibes",
-        songs: "80 songs",
-        image: chillPlaylist,
+        name: "Playlists",
+        icon: ListMusic,
+        path: "/library",
     },
     {
-        name: "Workout Mix",
-        songs: "60 songs",
-        image: workoutPlaylist,
+        name: "Albums",
+        icon: Disc3,
+        path: "/albums",
     },
     {
-        name: "Classic Hits",
-        songs: "90 songs",
-        image: classicPlaylist,
+        name: "Artists",
+        icon: Users,
+        path: "/artists",
     },
     {
-        name: "Focus Time",
-        songs: "70 songs",
-        image: focusPlaylist,
+        name: "Songs",
+        icon: Music2,
+        path: "/songs",
+    },
+    {
+        name: "Downloaded",
+        icon: Download,
+        path: null,
+        disabled: true,
     },
 ];
 
@@ -81,49 +95,26 @@ export default function Sidebar({
     };
 
     const handlePremium = () => {
-        if (onClose) {
-            onClose();
-        }
-
+        handleNavigation();
         navigate("/premium");
     };
 
-    const handleLibraryItem = (name) => {
-        if (onClose) {
-            onClose();
-        }
-
-        // Playlists are now connected to the Library page.
-        if (name === "Playlists") {
-            navigate("/library");
+    const handleLibraryItem = (item) => {
+        if (item.disabled || !item.path) {
             return;
         }
 
-        // These sections are not separate routes yet.
-        if (
-            name === "Albums" ||
-            name === "Artists" ||
-            name === "Songs"
-        ) {
-            navigate("/library");
-            return;
-        }
-
-        // Downloaded is not implemented yet.
+        handleNavigation();
+        navigate(item.path);
     };
 
     const handleCreatePlaylist = () => {
-        if (onClose) {
-            onClose();
-        }
-
+        handleNavigation();
         navigate("/library");
     };
 
     const handlePlaylistClick = (playlistId) => {
-        if (onClose) {
-            onClose();
-        }
+        handleNavigation();
 
         if (!playlistId) {
             navigate("/library");
@@ -133,9 +124,36 @@ export default function Sidebar({
         navigate(`/playlist/${playlistId}`);
     };
 
-    const libraryActive =
-        location.pathname === "/library" ||
-        location.pathname.startsWith("/playlist/");
+    const isMainActive = (path) => {
+        if (path === "/") {
+            return location.pathname === "/";
+        }
+
+        return location.pathname.startsWith(path);
+    };
+
+    const isLibraryItemActive = (item) => {
+        if (item.name === "Playlists") {
+            return (
+                location.pathname === "/library" ||
+                location.pathname.startsWith("/playlist/")
+            );
+        }
+
+        if (item.name === "Albums") {
+            return location.pathname.startsWith("/albums");
+        }
+
+        if (item.name === "Artists") {
+            return location.pathname.startsWith("/artists");
+        }
+
+        if (item.name === "Songs") {
+            return location.pathname.startsWith("/songs");
+        }
+
+        return false;
+    };
 
     return (
         <aside
@@ -176,7 +194,7 @@ export default function Sidebar({
                     />
                 </Link>
 
-                {/* Mobile Close Button */}
+                {/* MOBILE CLOSE */}
 
                 <button
                     type="button"
@@ -220,13 +238,7 @@ export default function Sidebar({
                 <nav className="space-y-1.5">
                     {mainNavigation.map((item) => {
                         const Icon = item.icon;
-
-                        const isActive =
-                            item.path === "/"
-                                ? location.pathname === "/"
-                                : location.pathname.startsWith(
-                                      item.path
-                                  );
+                        const isActive = isMainActive(item.path);
 
                         return (
                             <Link
@@ -242,10 +254,9 @@ export default function Sidebar({
                                     font-medium
                                     transition-all
                                     duration-200
-                                    ${
-                                        isActive
-                                            ? "bg-[#10aaa9] text-white shadow-[0_8px_24px_rgba(16,170,169,0.15)]"
-                                            : "text-[#a6afb4] hover:bg-white/[0.04] hover:text-white"
+                                    ${isActive
+                                        ? "bg-[#10aaa9] text-white shadow-[0_8px_24px_rgba(16,170,169,0.15)]"
+                                        : "text-[#a6afb4] hover:bg-white/[0.04] hover:text-white"
                                     }
                                 `}
                             >
@@ -254,15 +265,13 @@ export default function Sidebar({
                                     strokeWidth={1.8}
                                 />
 
-                                <span>
-                                    {item.name}
-                                </span>
+                                <span>{item.name}</span>
                             </Link>
                         );
                     })}
                 </nav>
 
-                {/* Divider */}
+                {/* DIVIDER */}
 
                 <div className="my-6 border-t border-white/[0.07]" />
 
@@ -286,58 +295,57 @@ export default function Sidebar({
                     </div>
 
                     <div className="space-y-1">
-                        {libraryNavigation.map(
-                            (item) => {
-                                const Icon = item.icon;
+                        {libraryNavigation.map((item) => {
+                            const Icon = item.icon;
+                            const isActive =
+                                isLibraryItemActive(item);
 
-                                const isActive =
-                                    item.name ===
-                                        "Playlists" &&
-                                    libraryActive;
-
-                                return (
-                                    <button
-                                        key={item.name}
-                                        type="button"
-                                        onClick={() =>
-                                            handleLibraryItem(
-                                                item.name
-                                            )
+                            return (
+                                <button
+                                    key={item.name}
+                                    type="button"
+                                    disabled={item.disabled}
+                                    onClick={() =>
+                                        handleLibraryItem(item)
+                                    }
+                                    className={`
+                                        flex h-[42px] w-full
+                                        items-center gap-4
+                                        rounded-[4px]
+                                        px-2
+                                        text-left
+                                        text-[13px]
+                                        font-medium
+                                        transition-all
+                                        duration-200
+                                        ${item.disabled
+                                            ? "cursor-not-allowed text-[#465056]"
+                                            : isActive
+                                                ? "bg-white/[0.05] text-[#10aaa9]"
+                                                : "text-[#a6afb4] hover:bg-white/[0.04] hover:text-white"
                                         }
-                                        className={`
-                                            flex h-[42px] w-full
-                                            items-center gap-4
-                                            rounded-[4px]
-                                            px-2
-                                            text-left
-                                            text-[13px]
-                                            font-medium
-                                            transition-all
-                                            duration-200
-                                            ${
-                                                isActive
-                                                    ? "bg-white/[0.05] text-[#10aaa9]"
-                                                    : "text-[#a6afb4] hover:bg-white/[0.04] hover:text-white"
-                                            }
-                                        `}
-                                    >
-                                        <Icon
-                                            size={18}
-                                            strokeWidth={1.7}
-                                        />
+                                    `}
+                                >
+                                    <Icon
+                                        size={18}
+                                        strokeWidth={1.7}
+                                    />
 
-                                        <span>
-                                            {item.name}
+                                    <span>{item.name}</span>
+
+                                    {item.disabled && (
+                                        <span className="ml-auto text-[9px] uppercase tracking-wider text-[#4d585e]">
+                                            Soon
                                         </span>
-                                    </button>
-                                );
-                            }
-                        )}
+                                    )}
+                                </button>
+                            );
+                        })}
                     </div>
                 </section>
 
                 {/* ======================================
-                    PLAYLISTS
+                    YOUR PLAYLISTS
                 ====================================== */}
 
                 <section className="mt-7">
@@ -357,9 +365,7 @@ export default function Sidebar({
                         <button
                             type="button"
                             aria-label="Create playlist"
-                            onClick={
-                                handleCreatePlaylist
-                            }
+                            onClick={handleCreatePlaylist}
                             className="
                                 flex h-6 w-6
                                 items-center justify-center
@@ -378,7 +384,7 @@ export default function Sidebar({
                     </div>
 
                     <div className="space-y-1">
-                        {/* Favorite Songs */}
+                        {/* FAVORITE SONGS */}
 
                         <button
                             type="button"
@@ -386,7 +392,7 @@ export default function Sidebar({
                                 handleNavigation();
                                 navigate("/library");
                             }}
-                            className="
+                            className={`
                                 flex w-full
                                 items-center gap-3
                                 rounded-[4px]
@@ -394,8 +400,11 @@ export default function Sidebar({
                                 text-left
                                 transition-all
                                 duration-200
-                                hover:bg-white/[0.04]
-                            "
+                                ${location.pathname === "/library"
+                                    ? "bg-white/[0.04]"
+                                    : "hover:bg-white/[0.04]"
+                                }
+                            `}
                         >
                             <img
                                 src={favoritePlaylist}
@@ -432,7 +441,7 @@ export default function Sidebar({
                             </div>
                         </button>
 
-                        {/* Firebase User Playlists */}
+                        {/* FIREBASE USER PLAYLISTS */}
 
                         {playlistsLoading ? (
                             <div
@@ -480,12 +489,8 @@ export default function Sidebar({
                                         >
                                             {playlist.image ? (
                                                 <img
-                                                    src={
-                                                        playlist.image
-                                                    }
-                                                    alt={
-                                                        playlist.name
-                                                    }
+                                                    src={playlist.image}
+                                                    alt={playlist.name}
                                                     className="
                                                         h-full
                                                         w-full
@@ -509,9 +514,7 @@ export default function Sidebar({
                                                     text-[#d7dcdf]
                                                 "
                                             >
-                                                {
-                                                    playlist.name
-                                                }
+                                                {playlist.name}
                                             </p>
 
                                             <p
@@ -524,12 +527,11 @@ export default function Sidebar({
                                                 {Array.isArray(
                                                     playlist.songs
                                                 )
-                                                    ? `${playlist.songs.length} ${
-                                                          playlist.songs.length ===
-                                                          1
-                                                              ? "song"
-                                                              : "songs"
-                                                      }`
+                                                    ? `${playlist.songs.length} ${playlist.songs.length ===
+                                                        1
+                                                        ? "song"
+                                                        : "songs"
+                                                    }`
                                                     : "0 songs"}
                                             </p>
                                         </div>
@@ -550,7 +552,7 @@ export default function Sidebar({
                         )}
                     </div>
 
-                    {/* Show more */}
+                    {/* SHOW MORE */}
 
                     {userPlaylists.length > 5 && (
                         <button
@@ -571,28 +573,6 @@ export default function Sidebar({
                             Show more
                         </button>
                     )}
-
-                    {/* Fallback visual playlists are intentionally
-                        not shown once Firebase playlists are available. */}
-
-                    {userPlaylists.length === 0 &&
-                        !playlistsLoading && (
-                            <div className="hidden">
-                                {fallbackPlaylists.map(
-                                    (playlist) => (
-                                        <div
-                                            key={
-                                                playlist.name
-                                            }
-                                        >
-                                            {
-                                                playlist.name
-                                            }
-                                        </div>
-                                    )
-                                )}
-                            </div>
-                        )}
                 </section>
 
                 {/* ======================================
