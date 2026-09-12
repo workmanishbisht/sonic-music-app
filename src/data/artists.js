@@ -1,4 +1,4 @@
-import ArijitSingh from "@/assets/artists/arijit-singh.webp";
+import ArijitSingh from "@/assets/artists/Arijit-singh.webp";
 import AlkaYagnik from "@/assets/artists/Alka-Yagnik.webp";
 import JasleenRoyal from "@/assets/artists/Jasleen_Royal.webp";
 import DiljitDosanjh from "@/assets/artists/Diljit-Dosanjh.webp";
