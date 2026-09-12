@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
     ArrowRight,
     ChevronLeft,
@@ -12,6 +12,12 @@ import AlbumCard from "@/components/music/AlbumCard";
 import SongRow from "@/components/music/SongRow";
 
 import { usePlayer } from "@/context/PlayerContext";
+import { useAuth } from "@/context/AuthContext";
+
+import { db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
+
+import { artists as artistData } from "@/data/artists";
 import { songs } from "@/data/songs";
 import { playlists } from "@/data/playlists";
 import { albums } from "@/data/albums";
@@ -20,7 +26,7 @@ import brahmastraCover from "@/assets/albums/brahmastra-cover.png";
 import bhediyaCover from "@/assets/albums/Bhediya.jpg";
 
 // =====================================================
-// HERO SLIDES — ONLY 2
+// HERO SLIDES
 // =====================================================
 
 const heroSlides = [
@@ -53,24 +59,267 @@ const heroSlides = [
 // =====================================================
 
 export default function Home() {
-    const recentlyPlayed = songs.slice(0, 5);
-    const popularSongs = songs.slice(0, 6);
-    const homeAlbums = albums.slice(0, 6);
-
+    const { user } = useAuth();
     const { playSong } = usePlayer();
 
+    const [userPreferences, setUserPreferences] = useState({
+        genres: [],
+        artists: [],
+        languages: [],
+    });
+
+    const [preferencesLoading, setPreferencesLoading] = useState(true);
     const [currentSlide, setCurrentSlide] = useState(0);
+
+    // =====================================================
+    // STATIC HOME DATA
+    // =====================================================
+
+    const recentlyPlayed = songs.slice(0, 5);
+    const popularSongs = songs.slice(0, 6);
+
+    // =====================================================
+    // LOAD FIRESTORE USER PREFERENCES
+    // =====================================================
+
+    useEffect(() => {
+        let isMounted = true;
+
+        const loadUserPreferences = async () => {
+            if (!user) {
+                if (isMounted) {
+                    setUserPreferences({
+                        genres: [],
+                        artists: [],
+                        languages: [],
+                    });
+
+                    setPreferencesLoading(false);
+                }
+
+                return;
+            }
+
+            setPreferencesLoading(true);
+
+            try {
+                const userRef = doc(db, "users", user.uid);
+                const userSnap = await getDoc(userRef);
+
+                if (!isMounted) return;
+
+                if (userSnap.exists()) {
+                    const data = userSnap.data();
+
+                    setUserPreferences({
+                        genres: Array.isArray(data.genres)
+                            ? data.genres
+                            : [],
+
+                        artists: Array.isArray(data.artists)
+                            ? data.artists
+                            : [],
+
+                        languages: Array.isArray(data.languages)
+                            ? data.languages
+                            : data.language
+                                ? [data.language]
+                                : [],
+                    });
+                } else {
+                    setUserPreferences({
+                        genres: [],
+                        artists: [],
+                        languages: [],
+                    });
+                }
+            } catch (error) {
+                console.error(
+                    "Failed to load Home preferences:",
+                    error
+                );
+
+                if (isMounted) {
+                    setUserPreferences({
+                        genres: [],
+                        artists: [],
+                        languages: [],
+                    });
+                }
+            } finally {
+                if (isMounted) {
+                    setPreferencesLoading(false);
+                }
+            }
+        };
+
+        loadUserPreferences();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [user]);
+
+    // =====================================================
+    // SELECTED ARTIST NAMES
+    // =====================================================
+
+    const selectedArtistNames = useMemo(() => {
+        return artistData
+            .filter((artist) =>
+                userPreferences.artists.includes(artist.id)
+            )
+            .map((artist) => artist.name);
+    }, [userPreferences.artists]);
+
+    // =====================================================
+    // PERSONALIZED SONGS
+    //
+    // Artist = 5 points
+    // Genre  = 3 points
+    // Language = 2 points
+    // =====================================================
+
+    const personalizedSongs = useMemo(() => {
+        const hasArtistPreference =
+            userPreferences.artists.length > 0;
+
+        const hasGenrePreference =
+            userPreferences.genres.length > 0;
+
+        const hasLanguagePreference =
+            userPreferences.languages.length > 0;
+
+        const hasAnyPreference =
+            hasArtistPreference ||
+            hasGenrePreference ||
+            hasLanguagePreference;
+
+        // No preferences
+        if (!hasAnyPreference) {
+            return songs.slice(0, 6);
+        }
+
+        const scoredSongs = songs.map((song) => {
+            let score = 0;
+
+            // ---------------------------------------------
+            // ARTIST MATCH
+            // ---------------------------------------------
+
+            const songArtistIds = Array.isArray(song.artistId)
+                ? song.artistId
+                : [];
+
+            const artistMatch = songArtistIds.some((artistId) =>
+                userPreferences.artists.includes(artistId)
+            );
+
+            if (artistMatch) {
+                score += 5;
+            }
+
+            // ---------------------------------------------
+            // GENRE MATCH
+            // ---------------------------------------------
+
+            const genreMatch = userPreferences.genres.some(
+                (genre) =>
+                    String(song.genre || "").toLowerCase() ===
+                    String(genre).toLowerCase()
+            );
+
+            if (genreMatch) {
+                score += 3;
+            }
+
+            // ---------------------------------------------
+            // LANGUAGE MATCH
+            // ---------------------------------------------
+
+            const languageMatch = userPreferences.languages.some(
+                (language) =>
+                    String(song.language || "").toLowerCase() ===
+                    String(language).toLowerCase()
+            );
+
+            if (languageMatch) {
+                score += 2;
+            }
+
+            return {
+                ...song,
+                recommendationScore: score,
+            };
+        });
+
+        const matchedSongs = scoredSongs
+            .filter((song) => song.recommendationScore > 0)
+            .sort(
+                (a, b) =>
+                    b.recommendationScore -
+                    a.recommendationScore
+            );
+
+        // If no preference matches existing songs,
+        // show normal songs instead of empty section.
+        if (!matchedSongs.length) {
+            return songs.slice(0, 6);
+        }
+
+        return matchedSongs.slice(0, 6);
+    }, [
+        userPreferences.artists,
+        userPreferences.genres,
+        userPreferences.languages,
+    ]);
+
+    // =====================================================
+    // PERSONALIZATION DESCRIPTION
+    // =====================================================
+
+    const personalizedDescription = useMemo(() => {
+        if (selectedArtistNames.length) {
+            return `Based on ${selectedArtistNames
+                .slice(0, 2)
+                .join(" & ")}`;
+        }
+
+        if (userPreferences.genres.length) {
+            return `Based on your ${userPreferences.genres
+                .slice(0, 2)
+                .join(" & ")} taste`;
+        }
+
+        if (userPreferences.languages.length) {
+            return `Based on your ${userPreferences.languages
+                .slice(0, 2)
+                .join(" & ")} music`;
+        }
+
+        return "Personalized picks for your taste";
+    }, [
+        selectedArtistNames,
+        userPreferences.genres,
+        userPreferences.languages,
+    ]);
+
+    // =====================================================
+    // ACTIVE HERO SLIDE
+    // =====================================================
 
     const activeSlide = heroSlides[currentSlide];
 
     // =====================================================
-    // AUTO CAROUSEL — 5.5 SECONDS
+    // AUTO CAROUSEL
     // =====================================================
 
     useEffect(() => {
         const timer = setInterval(() => {
             setCurrentSlide((prev) =>
-                prev === heroSlides.length - 1 ? 0 : prev + 1
+                prev === heroSlides.length - 1
+                    ? 0
+                    : prev + 1
             );
         }, 5500);
 
@@ -83,7 +332,9 @@ export default function Home() {
 
     const previousSlide = () => {
         setCurrentSlide((prev) =>
-            prev === 0 ? heroSlides.length - 1 : prev - 1
+            prev === 0
+                ? heroSlides.length - 1
+                : prev - 1
         );
     };
 
@@ -93,7 +344,9 @@ export default function Home() {
 
     const nextSlide = () => {
         setCurrentSlide((prev) =>
-            prev === heroSlides.length - 1 ? 0 : prev + 1
+            prev === heroSlides.length - 1
+                ? 0
+                : prev + 1
         );
     };
 
@@ -131,7 +384,7 @@ export default function Home() {
                     lg:min-h-[430px]
                 "
             >
-                {/* FULL HERO BACKGROUND IMAGE */}
+                {/* HERO BACKGROUND */}
 
                 <div
                     key={`hero-image-${activeSlide.id}`}
@@ -154,8 +407,6 @@ export default function Home() {
                         "
                     />
 
-                    {/* Dark left overlay */}
-
                     <div
                         className="
                             absolute
@@ -168,8 +419,6 @@ export default function Home() {
                         "
                     />
 
-                    {/* Bottom overlay */}
-
                     <div
                         className="
                             absolute
@@ -180,8 +429,6 @@ export default function Home() {
                             to-transparent
                         "
                     />
-
-                    {/* Teal glow */}
 
                     <div
                         className="
@@ -212,7 +459,6 @@ export default function Home() {
                     "
                 >
                     <div className="max-w-[600px]">
-                        {/* Eyebrow */}
 
                         <p
                             className="
@@ -228,8 +474,6 @@ export default function Home() {
                         >
                             {activeSlide.eyebrow}
                         </p>
-
-                        {/* Title */}
 
                         <h1
                             className="
@@ -250,8 +494,6 @@ export default function Home() {
                             {activeSlide.titleSecond}
                         </h1>
 
-                        {/* Description */}
-
                         <p
                             className="
                                 mt-4
@@ -266,8 +508,6 @@ export default function Home() {
                             {activeSlide.description}
                         </p>
 
-                        {/* Buttons */}
-
                         <div
                             className="
                                 mt-6
@@ -278,8 +518,6 @@ export default function Home() {
                                 sm:gap-3
                             "
                         >
-                            {/* Play */}
-
                             <button
                                 type="button"
                                 onClick={handleHeroPlay}
@@ -309,8 +547,6 @@ export default function Home() {
                                 {activeSlide.button}
                             </button>
 
-                            {/* Explore */}
-
                             <button
                                 type="button"
                                 className="
@@ -333,6 +569,7 @@ export default function Home() {
                                 "
                             >
                                 Explore
+
                                 <ArrowRight size={15} />
                             </button>
                         </div>
@@ -403,7 +640,7 @@ export default function Home() {
                     </button>
                 </div>
 
-                {/* 2 DOTS */}
+                {/* DOTS */}
 
                 <div
                     className="
@@ -421,23 +658,72 @@ export default function Home() {
                         <button
                             key={slide.id}
                             type="button"
-                            onClick={() => setCurrentSlide(index)}
+                            onClick={() =>
+                                setCurrentSlide(index)
+                            }
                             aria-label={`Go to slide ${index + 1}`}
                             className={`
                                 h-1.5
                                 rounded-full
                                 transition-all
                                 duration-300
-                                ${
-                                    currentSlide === index
-                                        ? "w-7 bg-[#10aaa9]"
-                                        : "w-1.5 bg-white/35 hover:bg-white/60"
+                                ${currentSlide === index
+                                    ? "w-7 bg-[#10aaa9]"
+                                    : "w-1.5 bg-white/35 hover:bg-white/60"
                                 }
                             `}
                         />
                     ))}
                 </div>
             </section>
+
+            {/* =================================================
+                PERSONALIZED PICKS
+            ================================================= */}
+
+            {user && !preferencesLoading && (
+                <section>
+                    <div className="mb-4 flex items-center justify-between">
+                        <div>
+                            <h2 className="text-[17px] font-semibold text-white sm:text-[18px]">
+                                Made for you
+                            </h2>
+
+                            <p className="mt-1 text-[11px] text-[#68747a]">
+                                {personalizedDescription}
+                            </p>
+                        </div>
+
+                        <span className="text-[11px] font-medium text-[#10aaa9]">
+                            For you
+                        </span>
+                    </div>
+
+                    <div
+                        className="
+                            flex
+                            gap-4
+                            overflow-x-auto
+                            pb-2
+                            scrollbar-hide
+                            sm:grid
+                            sm:grid-cols-3
+                            sm:gap-5
+                            md:grid-cols-4
+                            lg:grid-cols-5
+                        "
+                    >
+                        {personalizedSongs.map((song) => (
+                            <div
+                                key={`personalized-${song.id}`}
+                                className="w-[150px] shrink-0 sm:w-auto"
+                            >
+                                <SongCard song={song} />
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            )}
 
             {/* =================================================
                 RECENTLY PLAYED
@@ -499,7 +785,7 @@ export default function Home() {
             </section>
 
             {/* =================================================
-                MADE FOR YOU
+                PLAYLISTS
             ================================================= */}
 
             <section>
@@ -553,12 +839,7 @@ export default function Home() {
                             <PlaylistCard
                                 image={playlist.image}
                                 title={playlist.title}
-                                description={
-                                    playlist.songs
-                                        ? `${playlist.songs} • Curated for you`
-                                        : playlist.description ||
-                                          "Curated for you"
-                                }
+                                description={`${playlist.songs} • Curated for you`}
                             />
                         </div>
                     ))}
@@ -571,15 +852,9 @@ export default function Home() {
 
             <section>
                 <div className="mb-4 flex items-center justify-between">
-                    <div>
-                        <h2 className="text-[17px] font-semibold text-white sm:text-[18px]">
-                            Albums
-                        </h2>
-
-                        <p className="mt-1 text-[11px] text-[#68747a]">
-                            Explore albums and their songs
-                        </p>
-                    </div>
+                    <h2 className="text-[17px] font-semibold text-white sm:text-[18px]">
+                        Albums
+                    </h2>
 
                     <button
                         type="button"
@@ -612,11 +887,10 @@ export default function Home() {
                         sm:grid-cols-3
                         sm:gap-5
                         md:grid-cols-4
-                        lg:grid-cols-5
-                        xl:grid-cols-6
+                        lg:grid-cols-6
                     "
                 >
-                    {homeAlbums.map((album) => (
+                    {albums.map((album) => (
                         <div
                             key={album.id}
                             className="
@@ -644,8 +918,6 @@ export default function Home() {
                     bg-[#0d1418]
                 "
             >
-                {/* Popular Header */}
-
                 <div
                     className="
                         flex
@@ -681,7 +953,7 @@ export default function Home() {
                     </button>
                 </div>
 
-                {/* Desktop table header */}
+                {/* Desktop Header */}
 
                 <div
                     className="

@@ -1,4 +1,3 @@
-
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -18,6 +17,10 @@ import {
   XCircle,
   X,
   Menu,
+  Music2,
+  Heart,
+  Sparkles,
+  Check,
 } from "lucide-react";
 
 import { signOut } from "firebase/auth";
@@ -36,68 +39,60 @@ function Toast({ type = "success", message, onClose }) {
   return (
     <div
       className="
-            pointer-events-none
-            fixed
-            bottom-[105px]
-            left-1/2
-            z-[9999]
-            w-full
-            -translate-x-1/2
-            px-5
-        "
+        pointer-events-none
+        fixed
+        bottom-[105px]
+        left-1/2
+        z-[9999]
+        w-full
+        -translate-x-1/2
+        px-5
+      "
     >
       <div
         className="
-                    pointer-events-auto
-                    mx-auto
-                    flex
-                    w-full
-                    max-w-[390px]
-                    items-center
-                    gap-3
-                    rounded-[8px]
-                    border
-                    border-white/[0.08]
-                    bg-[#151d21]
-                    px-5
-                    py-4
-                    shadow-[0_20px_70px_rgba(0,0,0,0.55)]
-                    animate-[toastIn_0.35s_ease-out]
-                "
+          pointer-events-auto
+          mx-auto
+          flex
+          w-full
+          max-w-[390px]
+          items-center
+          gap-3
+          rounded-[8px]
+          border
+          border-white/[0.08]
+          bg-[#151d21]
+          px-5
+          py-4
+          shadow-[0_20px_70px_rgba(0,0,0,0.55)]
+          animate-[toastIn_0.35s_ease-out]
+        "
       >
         <div
           className={`
-                        flex
-                        h-10
-                        w-10
-                        shrink-0
-                        items-center
-                        justify-center
-                        rounded-full
-                        ${isSuccess
+            flex
+            h-10
+            w-10
+            shrink-0
+            items-center
+            justify-center
+            rounded-full
+            ${isSuccess
               ? "bg-[#10aaa9]/10 text-[#10aaa9]"
               : "bg-red-500/10 text-red-400"
             }
-                    `}
+          `}
         >
           {isSuccess ? (
-            <CheckCircle2
-              size={21}
-              strokeWidth={2}
-            />
+            <CheckCircle2 size={21} strokeWidth={2} />
           ) : (
-            <XCircle
-              size={21}
-              strokeWidth={2}
-            />
+            <XCircle size={21} strokeWidth={2} />
           )}
         </div>
 
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-semibold text-white">
-            {isSuccess
-              ? "Success"
-              : "Something went wrong"}
+            {isSuccess ? "Success" : "Something went wrong"}
           </p>
 
           <p className="mt-0.5 text-[12px] leading-5 text-[#8b969d]">
@@ -109,24 +104,71 @@ function Toast({ type = "success", message, onClose }) {
           type="button"
           onClick={onClose}
           className="
-                        flex
-                        h-7
-                        w-7
-                        shrink-0
-                        items-center
-                        justify-center
-                        rounded-full
-                        text-[#68747a]
-                        transition
-                        hover:bg-white/[0.05]
-                        hover:text-white
-                    "
+            flex
+            h-7
+            w-7
+            shrink-0
+            items-center
+            justify-center
+            rounded-full
+            text-[#68747a]
+            transition
+            hover:bg-white/[0.05]
+            hover:text-white
+          "
         >
           <X size={15} />
         </button>
       </div>
     </div>
   );
+}
+
+/* =========================================================
+   DEMO NOTIFICATIONS
+========================================================= */
+
+const initialNotifications = [
+  {
+    id: 1,
+    type: "release",
+    title: "New release available",
+    message: "New music from your favorite artists is now available.",
+    time: "10 min ago",
+    unread: true,
+  },
+  {
+    id: 2,
+    type: "playlist",
+    title: "Playlist updated",
+    message: "Your playlist has been successfully updated.",
+    time: "1 hour ago",
+    unread: true,
+  },
+  {
+    id: 3,
+    type: "welcome",
+    title: "Welcome to Sonic",
+    message: "Discover new music and create your perfect playlists.",
+    time: "Yesterday",
+    unread: false,
+  },
+];
+
+/* =========================================================
+   NOTIFICATION ICON
+========================================================= */
+
+function NotificationIcon({ type }) {
+  if (type === "playlist") {
+    return <Music2 size={16} />;
+  }
+
+  if (type === "welcome") {
+    return <Heart size={16} />;
+  }
+
+  return <Sparkles size={16} />;
 }
 
 /* =========================================================
@@ -156,10 +198,25 @@ export default function Header({ onMenuClick }) {
   const [isProfileOpen, setIsProfileOpen] =
     useState(false);
 
+  const [isNotificationOpen, setIsNotificationOpen] =
+    useState(false);
+
+  const [notifications, setNotifications] =
+    useState(initialNotifications);
+
   const [toast, setToast] = useState(null);
 
   const profileRef = useRef(null);
+  const notificationRef = useRef(null);
   const searchRef = useRef(null);
+
+  /* =====================================================
+     UNREAD COUNT
+  ===================================================== */
+
+  const unreadCount = notifications.filter(
+    (notification) => notification.unread
+  ).length;
 
   /* =====================================================
      SEARCH KEYBOARD SHORTCUT
@@ -186,9 +243,7 @@ export default function Header({ onMenuClick }) {
         event.preventDefault();
 
         const searchInput =
-          document.getElementById(
-            "sonic-search"
-          );
+          document.getElementById("sonic-search");
 
         searchInput?.focus();
       }
@@ -208,25 +263,28 @@ export default function Header({ onMenuClick }) {
   }, []);
 
   /* =====================================================
-     CLOSE PROFILE ON OUTSIDE CLICK
+     CLOSE DROPDOWNS ON OUTSIDE CLICK
   ===================================================== */
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
       if (
         profileRef.current &&
-        !profileRef.current.contains(
-          event.target
-        )
+        !profileRef.current.contains(event.target)
       ) {
         setIsProfileOpen(false);
       }
 
       if (
+        notificationRef.current &&
+        !notificationRef.current.contains(event.target)
+      ) {
+        setIsNotificationOpen(false);
+      }
+
+      if (
         searchRef.current &&
-        !searchRef.current.contains(
-          event.target
-        )
+        !searchRef.current.contains(event.target)
       ) {
         setSearchValue((previous) =>
           previous ? previous : ""
@@ -255,6 +313,7 @@ export default function Header({ onMenuClick }) {
     const handleEscape = (event) => {
       if (event.key === "Escape") {
         setIsProfileOpen(false);
+        setIsNotificationOpen(false);
       }
     };
 
@@ -298,37 +357,23 @@ export default function Header({ onMenuClick }) {
       await signOut(auth);
 
       setIsProfileOpen(false);
-
-      /* =============================================
-         LOGOUT SUCCESS TOAST
-      ============================================= */
+      setIsNotificationOpen(false);
 
       setToast({
         type: "success",
-        message:
-          "You're logged out successfully.",
+        message: "You're logged out successfully.",
       });
-
-      /* =============================================
-         GO HOME AFTER TOAST
-      ============================================= */
 
       setTimeout(() => {
         navigate("/");
       }, 1200);
-
     } catch (error) {
-      console.error(
-        "Logout Error:",
-        error
-      );
+      console.error("Logout Error:", error);
 
       setToast({
         type: "error",
-        message:
-          "Unable to log out. Please try again.",
+        message: "Unable to log out. Please try again.",
       });
-
     } finally {
       setIsLoggingOut(false);
     }
@@ -368,7 +413,6 @@ export default function Header({ onMenuClick }) {
 
   /* =====================================================
      SOCIAL PROFILE PHOTO
-     Google/Facebook photo only
   ===================================================== */
 
   const hasSocialProfilePhoto =
@@ -387,14 +431,20 @@ export default function Header({ onMenuClick }) {
     setSearchValue(event.target.value);
   };
 
-  const searchQuery = searchValue.trim().toLowerCase();
+  const searchQuery =
+    searchValue.trim().toLowerCase();
 
   const searchResults = searchQuery
     ? songs
       .filter((song) => {
-        const title = song.title?.toLowerCase() || "";
-        const artist = song.artist?.toLowerCase() || "";
-        const album = song.album?.toLowerCase() || "";
+        const title =
+          song.title?.toLowerCase() || "";
+
+        const artist =
+          song.artist?.toLowerCase() || "";
+
+        const album =
+          song.album?.toLowerCase() || "";
 
         return (
           title.includes(searchQuery) ||
@@ -407,9 +457,6 @@ export default function Header({ onMenuClick }) {
 
   const handleSearchSubmit = (event) => {
     event.preventDefault();
-
-    // Search is live; keep the dropdown open instead
-    // of navigating to a separate page.
   };
 
   const handleSearchResultClick = (song) => {
@@ -427,40 +474,91 @@ export default function Header({ onMenuClick }) {
     setIsProfileOpen(
       (previous) => !previous
     );
+
+    setIsNotificationOpen(false);
+  };
+
+  /* =====================================================
+     NOTIFICATION TOGGLE
+  ===================================================== */
+
+  const handleNotificationToggle = () => {
+    setIsNotificationOpen(
+      (previous) => !previous
+    );
+
+    setIsProfileOpen(false);
+  };
+
+  /* =====================================================
+     MARK SINGLE NOTIFICATION READ
+  ===================================================== */
+
+  const handleNotificationClick = (notificationId) => {
+    setNotifications((previous) =>
+      previous.map((notification) =>
+        notification.id === notificationId
+          ? {
+            ...notification,
+            unread: false,
+          }
+          : notification
+      )
+    );
+  };
+
+  /* =====================================================
+     MARK ALL AS READ
+  ===================================================== */
+
+  const handleMarkAllAsRead = () => {
+    if (unreadCount === 0) return;
+
+    setNotifications((previous) =>
+      previous.map((notification) => ({
+        ...notification,
+        unread: false,
+      }))
+    );
+
+    setToast({
+      type: "success",
+      message: "All notifications marked as read.",
+    });
   };
 
   return (
     <>
       <header
         className="
-                    sticky
-                    top-0
-                    z-50
-                    flex
-                    h-[70px]
-                    w-full
-                    min-w-0
-                    shrink-0
-                    items-center
-                    gap-3
-                    border-b
-                    border-white/[0.06]
-                    bg-[#070c0f]/95
-                    px-4
-                    backdrop-blur-xl
+          sticky
+          top-0
+          z-50
+          flex
+          h-[70px]
+          w-full
+          min-w-0
+          shrink-0
+          items-center
+          gap-3
+          border-b
+          border-white/[0.06]
+          bg-[#070c0f]/95
+          px-4
+          backdrop-blur-xl
 
-                    sm:h-[76px]
-                    sm:px-6
+          sm:h-[76px]
+          sm:px-6
 
-                    lg:h-[82px]
-                    lg:gap-6
-                    lg:px-8
-                "
+          lg:h-[82px]
+          lg:gap-6
+          lg:px-8
+        "
       >
-
         {/* =================================================
-                    MOBILE MENU TOGGLE
-                ================================================= */}
+            MOBILE MENU
+        ================================================= */}
+
         <button
           type="button"
           onClick={onMenuClick}
@@ -492,94 +590,89 @@ export default function Header({ onMenuClick }) {
         </button>
 
         {/* =================================================
-                    SEARCH
-                ================================================= */}
+            SEARCH
+        ================================================= */}
 
         <form
-          onSubmit={
-            handleSearchSubmit
-          }
+          onSubmit={handleSearchSubmit}
           className="
-                        min-w-0
-                        flex-1
-                        lg:max-w-[620px]
-                    "
+            min-w-0
+            flex-1
+            lg:max-w-[620px]
+          "
         >
           <div
             ref={searchRef}
             className="relative w-full"
           >
-
             <Search
               size={18}
               className="
-                                pointer-events-none
-                                absolute
-                                left-3.5
-                                top-1/2
-                                -translate-y-1/2
-                                text-[#7d888e]
+                pointer-events-none
+                absolute
+                left-3.5
+                top-1/2
+                -translate-y-1/2
+                text-[#7d888e]
 
-                                sm:left-4
-                            "
+                sm:left-4
+              "
             />
 
             <input
               id="sonic-search"
               type="text"
               value={searchValue}
-              onChange={
-                handleSearchChange
-              }
+              onChange={handleSearchChange}
               placeholder="What do you want to play?"
               className="
-                                h-10
-                                w-full
-                                rounded-[4px]
-                                border
-                                border-white/[0.07]
-                                bg-[#141b20]
-                                pl-10
-                                pr-10
-                                text-[12px]
-                                text-white
-                                outline-none
-                                transition-all
+                h-10
+                w-full
+                rounded-[4px]
+                border
+                border-white/[0.07]
+                bg-[#141b20]
+                pl-10
+                pr-10
+                text-[12px]
+                text-white
+                outline-none
+                transition-all
 
-                                placeholder:text-[#68747a]
+                placeholder:text-[#68747a]
 
-                                hover:border-white/[0.12]
+                hover:border-white/[0.12]
 
-                                focus:border-[#10aaa9]/60
-                                focus:bg-[#171f24]
+                focus:border-[#10aaa9]/60
+                focus:bg-[#171f24]
 
-                                sm:h-11
-                                sm:pl-11
-                                sm:pr-14
-                                sm:text-[13px]
-                            "
+                sm:h-11
+                sm:pl-11
+                sm:pr-14
+                sm:text-[13px]
+              "
             />
 
             <span
               className="
-                                pointer-events-none
-                                absolute
-                                right-2.5
-                                top-1/2
-                                hidden
-                                h-6
-                                -translate-y-1/2
-                                items-center
-                                rounded-[4px]
-                                border
-                                border-white/[0.06]
-                                bg-white/[0.04]
-                                px-2
-                                text-[11px]
-                                text-[#68747a]
+                pointer-events-none
+                absolute
+                right-2.5
+                top-1/2
+                hidden
+                h-6
+                -translate-y-1/2
+                items-center
+                rounded-[4px]
+                border
+                border-white/[0.06]
+                bg-white/[0.04]
+                px-2
+                text-[11px]
+                text-[#68747a]
 
-                                sm:flex
-                            "
+                sm:flex
+              "
             >
               /
             </span>
@@ -685,58 +778,53 @@ export default function Header({ onMenuClick }) {
                 )}
               </div>
             )}
-
           </div>
         </form>
 
         {/* =================================================
-                    RIGHT ACTIONS
-                ================================================= */}
+            RIGHT ACTIONS
+        ================================================= */}
 
         <div
           className="
-                        ml-auto
-                        flex
-                        shrink-0
-                        items-center
-                        gap-1
+            ml-auto
+            flex
+            shrink-0
+            items-center
+            gap-1
 
-                        sm:gap-2
+            sm:gap-2
 
-                        lg:gap-3
-                    "
+            lg:gap-3
+          "
         >
-
           {/* =================================================
-                        AUTH LOADING
-                    ================================================= */}
+              AUTH LOADING
+          ================================================= */}
 
           {loading ? (
-
             <div
               className="
-                                flex
-                                h-9
-                                w-9
-                                items-center
-                                justify-center
-                            "
+                flex
+                h-9
+                w-9
+                items-center
+                justify-center
+              "
             >
               <span
                 className="
-                                    h-4
-                                    w-4
-                                    animate-spin
-                                    rounded-full
-                                    border-2
-                                    border-white/20
-                                    border-t-[#10aaa9]
-                                "
+                  h-4
+                  w-4
+                  animate-spin
+                  rounded-full
+                  border-2
+                  border-white/20
+                  border-t-[#10aaa9]
+                "
               />
             </div>
-
           ) : !isAuthenticated ? (
-
             /* =================================================
                 LOGGED OUT
             ================================================= */
@@ -748,22 +836,22 @@ export default function Header({ onMenuClick }) {
                 type="button"
                 onClick={() => navigate("/premium")}
                 className="
-                                    hidden
-                                    items-center
-                                    gap-2
-                                    rounded-[4px]
-                                    px-2
-                                    py-2
-                                    text-[12px]
-                                    font-medium
-                                    text-[#f4c542]
-                                    transition
+                  hidden
+                  items-center
+                  gap-2
+                  rounded-[4px]
+                  px-2
+                  py-2
+                  text-[12px]
+                  font-medium
+                  text-[#f4c542]
+                  transition
 
-                                    hover:bg-[#f4c542]/[0.08]
-                                    hover:text-[#ffd95a]
+                  hover:bg-[#f4c542]/[0.08]
+                  hover:text-[#ffd95a]
 
-                                    lg:flex
-                                "
+                  lg:flex
+                "
               >
                 <Crown size={15} />
 
@@ -777,22 +865,22 @@ export default function Header({ onMenuClick }) {
               <button
                 type="button"
                 className="
-                                    hidden
-                                    items-center
-                                    gap-2
-                                    rounded-[4px]
-                                    px-2
-                                    py-2
-                                    text-[12px]
-                                    font-medium
-                                    text-[#a5afb4]
-                                    transition
+                  hidden
+                  items-center
+                  gap-2
+                  rounded-[4px]
+                  px-2
+                  py-2
+                  text-[12px]
+                  font-medium
+                  text-[#a5afb4]
+                  transition
 
-                                    hover:bg-white/[0.04]
-                                    hover:text-white
+                  hover:bg-white/[0.04]
+                  hover:text-white
 
-                                    xl:flex
-                                "
+                  xl:flex
+                "
               >
                 <Headphones size={15} />
 
@@ -805,13 +893,13 @@ export default function Header({ onMenuClick }) {
 
               <div
                 className="
-                                    hidden
-                                    h-6
-                                    w-px
-                                    bg-white/[0.08]
+                  hidden
+                  h-6
+                  w-px
+                  bg-white/[0.08]
 
-                                    sm:block
-                                "
+                  sm:block
+                "
               />
 
               {/* Login */}
@@ -819,28 +907,28 @@ export default function Header({ onMenuClick }) {
               <Link
                 to="/login"
                 className="
-                                    flex
-                                    h-9
-                                    shrink-0
-                                    items-center
-                                    gap-1.5
-                                    rounded-[4px]
-                                    px-2
-                                    text-[11px]
-                                    font-semibold
-                                    text-[#d5dbde]
-                                    transition
+                  flex
+                  h-9
+                  shrink-0
+                  items-center
+                  gap-1.5
+                  rounded-[4px]
+                  px-2
+                  text-[11px]
+                  font-semibold
+                  text-[#d5dbde]
+                  transition
 
-                                    hover:bg-white/[0.05]
-                                    hover:text-white
+                  hover:bg-white/[0.05]
+                  hover:text-white
 
-                                    sm:h-10
-                                    sm:gap-2
-                                    sm:px-3
-                                    sm:text-[12px]
+                  sm:h-10
+                  sm:gap-2
+                  sm:px-3
+                  sm:text-[12px]
 
-                                    lg:px-4
-                                "
+                  lg:px-4
+                "
               >
                 <LogIn size={15} />
 
@@ -854,29 +942,29 @@ export default function Header({ onMenuClick }) {
               <Link
                 to="/signup"
                 className="
-                                    flex
-                                    h-9
-                                    shrink-0
-                                    items-center
-                                    gap-1.5
-                                    rounded-[4px]
-                                    bg-[#10aaa9]
-                                    px-2.5
-                                    text-[11px]
-                                    font-semibold
-                                    text-white
-                                    shadow-[0_6px_20px_rgba(16,170,169,0.12)]
-                                    transition
+                  flex
+                  h-9
+                  shrink-0
+                  items-center
+                  gap-1.5
+                  rounded-[4px]
+                  bg-[#10aaa9]
+                  px-2.5
+                  text-[11px]
+                  font-semibold
+                  text-white
+                  shadow-[0_6px_20px_rgba(16,170,169,0.12)]
+                  transition
 
-                                    hover:bg-[#12c1bf]
+                  hover:bg-[#12c1bf]
 
-                                    sm:h-10
-                                    sm:gap-2
-                                    sm:px-4
-                                    sm:text-[12px]
+                  sm:h-10
+                  sm:gap-2
+                  sm:px-4
+                  sm:text-[12px]
 
-                                    lg:px-5
-                                "
+                  lg:px-5
+                "
               >
                 <UserPlus size={15} />
 
@@ -885,9 +973,7 @@ export default function Header({ onMenuClick }) {
                 </span>
               </Link>
             </>
-
           ) : (
-
             /* =================================================
                 LOGGED IN
             ================================================= */
@@ -899,22 +985,22 @@ export default function Header({ onMenuClick }) {
                 type="button"
                 onClick={() => navigate("/premium")}
                 className="
-                                    hidden
-                                    items-center
-                                    gap-2
-                                    rounded-[4px]
-                                    px-2
-                                    py-2
-                                    text-[12px]
-                                    font-medium
-                                    text-[#f4c542]
-                                    transition
+                  hidden
+                  items-center
+                  gap-2
+                  rounded-[4px]
+                  px-2
+                  py-2
+                  text-[12px]
+                  font-medium
+                  text-[#f4c542]
+                  transition
 
-                                    hover:bg-[#f4c542]/[0.08]
-                                    hover:text-[#ffd95a]
+                  hover:bg-[#f4c542]/[0.08]
+                  hover:text-[#ffd95a]
 
-                                    lg:flex
-                                "
+                  lg:flex
+                "
               >
                 <Crown size={15} />
 
@@ -923,114 +1009,368 @@ export default function Header({ onMenuClick }) {
                 </span>
               </button>
 
-              {/* Notification */}
+              {/* =================================================
+                  NOTIFICATIONS
+              ================================================= */}
 
-              <button
-                type="button"
-                aria-label="Notifications"
-                className="
-                                    relative
-                                    flex
-                                    h-9
-                                    w-9
-                                    shrink-0
-                                    items-center
-                                    justify-center
-                                    rounded-full
-                                    text-[#a5afb4]
-                                    transition
-
-                                    hover:bg-white/[0.05]
-                                    hover:text-white
-                                "
+              <div
+                ref={notificationRef}
+                className="relative shrink-0"
               >
-                <Bell size={18} />
+                <button
+                  type="button"
+                  aria-label="Notifications"
+                  aria-expanded={isNotificationOpen}
+                  onClick={handleNotificationToggle}
+                  className={`
+                    relative
+                    flex
+                    h-9
+                    w-9
+                    shrink-0
+                    items-center
+                    justify-center
+                    rounded-full
+                    transition
 
-                <span
-                  className="
-                                        absolute
-                                        right-[7px]
-                                        top-[6px]
-                                        h-[5px]
-                                        w-[5px]
-                                        rounded-full
-                                        bg-[#10aaa9]
+                    ${isNotificationOpen
+                      ? "bg-white/[0.07] text-white"
+                      : "text-[#a5afb4] hover:bg-white/[0.05] hover:text-white"
+                    }
+                  `}
+                >
+                  <Bell size={18} />
+
+                  {unreadCount > 0 && (
+                    <>
+                      <span
+                        className="
+                          absolute
+                          right-[7px]
+                          top-[6px]
+                          h-[6px]
+                          w-[6px]
+                          rounded-full
+                          bg-[#10aaa9]
+                          ring-2
+                          ring-[#070c0f]
+                        "
+                      />
+                    </>
+                  )}
+                </button>
+
+                {/* =================================================
+                    NOTIFICATION DROPDOWN
+                ================================================= */}
+
+                {isNotificationOpen && (
+                  <div
+                    className="
+                      absolute
+                      right-0
+                      top-[calc(100%+10px)]
+                      z-[200]
+                      w-[350px]
+                      max-w-[calc(100vw-32px)]
+                      overflow-hidden
+                      rounded-[8px]
+                      border
+                      border-white/[0.08]
+                      bg-[#11181d]
+                      shadow-[0_20px_70px_rgba(0,0,0,0.6)]
+                      animate-[dropdownIn_0.18s_ease-out]
+                    "
+                  >
+                    {/* Header */}
+
+                    <div
+                      className="
+                        flex
+                        items-center
+                        justify-between
+                        border-b
+                        border-white/[0.07]
+                        px-4
+                        py-4
+                      "
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-[13px] font-semibold text-white">
+                            Notifications
+                          </h3>
+
+                          {unreadCount > 0 && (
+                            <span
+                              className="
+                                flex
+                                h-5
+                                min-w-5
+                                items-center
+                                justify-center
+                                rounded-full
+                                bg-[#10aaa9]/10
+                                px-1.5
+                                text-[9px]
+                                font-semibold
+                                text-[#10aaa9]
+                              "
+                            >
+                              {unreadCount}
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="mt-1 text-[10px] text-[#68747a]">
+                          Your latest Sonic updates
+                        </p>
+                      </div>
+
+                      {unreadCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleMarkAllAsRead}
+                          className="
+                            flex
+                            items-center
+                            gap-1.5
+                            rounded-[4px]
+                            px-2
+                            py-1.5
+                            text-[10px]
+                            font-medium
+                            text-[#7f8a90]
+                            transition
+                            hover:bg-white/[0.05]
+                            hover:text-[#10aaa9]
+                          "
+                        >
+                          <Check size={13} />
+
+                          <span>
+                            Mark all read
+                          </span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Notification List */}
+
+                    {notifications.length > 0 ? (
+                      <div className="max-h-[390px] overflow-y-auto">
+                        {notifications.map(
+                          (notification) => (
+                            <button
+                              key={notification.id}
+                              type="button"
+                              onClick={() =>
+                                handleNotificationClick(
+                                  notification.id
+                                )
+                              }
+                              className={`
+                                flex
+                                w-full
+                                gap-3
+                                border-b
+                                border-white/[0.05]
+                                px-4
+                                py-3.5
+                                text-left
+                                transition
+
+                                ${notification.unread
+                                  ? "bg-[#10aaa9]/[0.025]"
+                                  : "bg-transparent"
+                                }
+
+                                hover:bg-white/[0.04]
+                              `}
+                            >
+                              {/* Icon */}
+
+                              <div
+                                className={`
+                                  relative
+                                  flex
+                                  h-9
+                                  w-9
+                                  shrink-0
+                                  items-center
+                                  justify-center
+                                  rounded-full
+
+                                  ${notification.unread
+                                    ? "bg-[#10aaa9]/10 text-[#10aaa9]"
+                                    : "bg-[#182126] text-[#718087]"
+                                  }
+                                `}
+                              >
+                                <NotificationIcon
+                                  type={
+                                    notification.type
+                                  }
+                                />
+
+                                {notification.unread && (
+                                  <span
+                                    className="
+                                      absolute
+                                      -right-0.5
+                                      -top-0.5
+                                      h-2
+                                      w-2
+                                      rounded-full
+                                      bg-[#10aaa9]
+                                      ring-2
+                                      ring-[#11181d]
                                     "
-                />
-              </button>
+                                  />
+                                )}
+                              </div>
+
+                              {/* Content */}
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-start justify-between gap-3">
+                                  <p
+                                    className={`
+                                      text-[11px]
+                                      font-semibold
+
+                                      ${notification.unread
+                                        ? "text-white"
+                                        : "text-[#a7b0b4]"
+                                      }
+                                    `}
+                                  >
+                                    {notification.title}
+                                  </p>
+
+                                  <span className="shrink-0 text-[9px] text-[#59656b]">
+                                    {notification.time}
+                                  </span>
+                                </div>
+
+                                <p className="mt-1 text-[10px] leading-4 text-[#727e84]">
+                                  {notification.message}
+                                </p>
+                              </div>
+                            </button>
+                          )
+                        )}
+                      </div>
+                    ) : (
+                      <div className="px-5 py-10 text-center">
+                        <div
+                          className="
+                            mx-auto
+                            mb-3
+                            flex
+                            h-11
+                            w-11
+                            items-center
+                            justify-center
+                            rounded-full
+                            bg-[#182126]
+                            text-[#68747a]
+                          "
+                        >
+                          <Bell size={18} />
+                        </div>
+
+                        <p className="text-[12px] font-medium text-white">
+                          No notifications
+                        </p>
+
+                        <p className="mt-1 text-[10px] text-[#68747a]">
+                          You're all caught up.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Footer */}
+
+                    <div
+                      className="
+                        border-t
+                        border-white/[0.06]
+                        px-4
+                        py-2.5
+                      "
+                    >
+                      <p className="text-center text-[9px] text-[#59656b]">
+                        Notifications will appear here
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* =================================================
-                                PROFILE
-                            ================================================= */}
+                  PROFILE
+              ================================================= */}
 
               <div
                 ref={profileRef}
-                className="
-                                    relative
-                                    shrink-0
-                                "
+                className="relative shrink-0"
               >
-
                 {/* Profile Button */}
 
                 <button
                   type="button"
-                  onClick={
-                    handleProfileToggle
-                  }
-                  aria-expanded={
-                    isProfileOpen
-                  }
+                  onClick={handleProfileToggle}
+                  aria-expanded={isProfileOpen}
                   aria-haspopup="menu"
                   className="
-                                        group
-                                        flex
-                                        shrink-0
-                                        items-center
-                                        gap-2
-                                        rounded-[5px]
-                                        px-1
-                                        py-1.5
-                                        transition
+                    group
+                    flex
+                    shrink-0
+                    items-center
+                    gap-2
+                    rounded-[5px]
+                    px-1
+                    py-1.5
+                    transition
 
-                                        hover:bg-white/[0.05]
+                    hover:bg-white/[0.05]
 
-                                        sm:gap-2.5
-                                        sm:px-2
-                                    "
+                    sm:gap-2.5
+                    sm:px-2
+                  "
                 >
-
                   {/* Avatar */}
 
                   <div
                     className="
-                                            flex
-                                            h-8
-                                            w-8
-                                            shrink-0
-                                            items-center
-                                            justify-center
-                                            overflow-hidden
-                                            rounded-full
-                                            bg-[#10aaa9]
-                                            text-[10px]
-                                            font-semibold
-                                            text-white
+                      flex
+                      h-8
+                      w-8
+                      shrink-0
+                      items-center
+                      justify-center
+                      overflow-hidden
+                      rounded-full
+                      bg-[#10aaa9]
+                      text-[10px]
+                      font-semibold
+                      text-white
 
-                                            sm:h-9
-                                            sm:w-9
-                                            sm:text-[11px]
-                                        "
+                      sm:h-9
+                      sm:w-9
+                      sm:text-[11px]
+                    "
                   >
                     {hasSocialProfilePhoto ? (
                       <img
                         src={user.photoURL}
                         alt={userName}
                         className="
-                                                    h-full
-                                                    w-full
-                                                    object-cover
-                                                "
+                          h-full
+                          w-full
+                          object-cover
+                        "
                       />
                     ) : (
                       <UserRound
@@ -1045,16 +1385,16 @@ export default function Header({ onMenuClick }) {
 
                   <span
                     className="
-                                            hidden
-                                            max-w-[110px]
-                                            truncate
-                                            text-[12px]
-                                            font-medium
-                                            text-white
+                      hidden
+                      max-w-[110px]
+                      truncate
+                      text-[12px]
+                      font-medium
+                      text-white
 
-                                            sm:block
-                                            lg:max-w-[130px]
-                                        "
+                      sm:block
+                      lg:max-w-[130px]
+                    "
                   >
                     {userName}
                   </span>
@@ -1064,128 +1404,115 @@ export default function Header({ onMenuClick }) {
                   <ChevronDown
                     size={14}
                     className={`
-                                            hidden
-                                            text-[#68747a]
-                                            transition-transform
-                                            duration-200
+                      hidden
+                      text-[#68747a]
+                      transition-transform
+                      duration-200
 
-                                            sm:block
+                      sm:block
 
-                                            ${isProfileOpen
+                      ${isProfileOpen
                         ? "rotate-180 text-white"
                         : "group-hover:text-white"
                       }
-                                        `}
+                    `}
                   />
-
                 </button>
 
                 {/* =================================================
-                                    DROPDOWN
-                                ================================================= */}
+                    PROFILE DROPDOWN
+                ================================================= */}
 
                 {isProfileOpen && (
                   <div
                     className="
-                                            absolute
-                                            right-0
-                                            top-[calc(100%+10px)]
-                                            z-[100]
-                                            w-[270px]
-                                            overflow-hidden
-                                            rounded-[7px]
-                                            border
-                                            border-white/[0.08]
-                                            bg-[#11181d]
-                                            shadow-[0_20px_60px_rgba(0,0,0,0.55)]
-                                            animate-[dropdownIn_0.18s_ease-out]
-                                        "
+                      absolute
+                      right-0
+                      top-[calc(100%+10px)]
+                      z-[100]
+                      w-[270px]
+                      overflow-hidden
+                      rounded-[7px]
+                      border
+                      border-white/[0.08]
+                      bg-[#11181d]
+                      shadow-[0_20px_60px_rgba(0,0,0,0.55)]
+                      animate-[dropdownIn_0.18s_ease-out]
+                    "
                     role="menu"
                   >
-
                     {/* Account Info */}
 
                     <div
                       className="
-                                                flex
-                                                items-center
-                                                gap-3
-                                                border-b
-                                                border-white/[0.07]
-                                                px-4
-                                                py-4
-                                            "
+                        flex
+                        items-center
+                        gap-3
+                        border-b
+                        border-white/[0.07]
+                        px-4
+                        py-4
+                      "
                     >
-
                       <div
                         className="
-                                                    flex
-                                                    h-10
-                                                    w-10
-                                                    shrink-0
-                                                    items-center
-                                                    justify-center
-                                                    overflow-hidden
-                                                    rounded-full
-                                                    bg-[#10aaa9]
-                                                    text-[11px]
-                                                    font-semibold
-                                                    text-white
-                                                "
+                          flex
+                          h-10
+                          w-10
+                          shrink-0
+                          items-center
+                          justify-center
+                          overflow-hidden
+                          rounded-full
+                          bg-[#10aaa9]
+                          text-[11px]
+                          font-semibold
+                          text-white
+                        "
                       >
                         {user?.photoURL ? (
                           <img
-                            src={
-                              user.photoURL
-                            }
-                            alt={
-                              userName
-                            }
+                            src={user.photoURL}
+                            alt={userName}
                             className="
-                                                            h-full
-                                                            w-full
-                                                            object-cover
-                                                        "
+                              h-full
+                              w-full
+                              object-cover
+                            "
                           />
                         ) : (
-                          getInitials(
-                            userName
-                          )
+                          getInitials(userName)
                         )}
                       </div>
 
                       <div className="min-w-0">
-
                         <p
                           className="
-                                                        truncate
-                                                        text-[13px]
-                                                        font-semibold
-                                                        text-white
-                                                    "
+                            truncate
+                            text-[13px]
+                            font-semibold
+                            text-white
+                          "
                         >
                           {userName}
                         </p>
 
                         <p
                           className="
-                                                        mt-1
-                                                        truncate
-                                                        text-[11px]
-                                                        text-[#727e84]
-                                                    "
+                            mt-1
+                            truncate
+                            text-[11px]
+                            text-[#727e84]
+                          "
                         >
                           {userEmail}
                         </p>
-
                       </div>
-
                     </div>
 
                     {/* Menu */}
 
                     <div className="p-1.5">
-
                       {/* Profile */}
 
                       <button
@@ -1195,22 +1522,22 @@ export default function Header({ onMenuClick }) {
                           navigate("/profile");
                         }}
                         className="
-                                                    flex
-                                                    w-full
-                                                    items-center
-                                                    gap-3
-                                                    rounded-[5px]
-                                                    px-3
-                                                    py-2.5
-                                                    text-left
-                                                    text-[12px]
-                                                    font-medium
-                                                    text-[#b7c0c4]
-                                                    transition
+                          flex
+                          w-full
+                          items-center
+                          gap-3
+                          rounded-[5px]
+                          px-3
+                          py-2.5
+                          text-left
+                          text-[12px]
+                          font-medium
+                          text-[#b7c0c4]
+                          transition
 
-                                                    hover:bg-white/[0.05]
-                                                    hover:text-white
-                                                "
+                          hover:bg-white/[0.05]
+                          hover:text-white
+                        "
                         role="menuitem"
                       >
                         <User
@@ -1229,24 +1556,25 @@ export default function Header({ onMenuClick }) {
                         type="button"
                         onClick={() => {
                           setIsProfileOpen(false);
+                          navigate("/settings");
                         }}
                         className="
-                                                    flex
-                                                    w-full
-                                                    items-center
-                                                    gap-3
-                                                    rounded-[5px]
-                                                    px-3
-                                                    py-2.5
-                                                    text-left
-                                                    text-[12px]
-                                                    font-medium
-                                                    text-[#b7c0c4]
-                                                    transition
+                          flex
+                          w-full
+                          items-center
+                          gap-3
+                          rounded-[5px]
+                          px-3
+                          py-2.5
+                          text-left
+                          text-[12px]
+                          font-medium
+                          text-[#b7c0c4]
+                          transition
 
-                                                    hover:bg-white/[0.05]
-                                                    hover:text-white
-                                                "
+                          hover:bg-white/[0.05]
+                          hover:text-white
+                        "
                         role="menuitem"
                       >
                         <Settings
@@ -1258,70 +1586,61 @@ export default function Header({ onMenuClick }) {
                           Settings
                         </span>
                       </button>
-
                     </div>
 
                     {/* Divider */}
 
                     <div
                       className="
-                                                mx-3
-                                                h-px
-                                                bg-white/[0.07]
-                                            "
+                        mx-3
+                        h-px
+                        bg-white/[0.07]
+                      "
                     />
 
                     {/* Logout */}
 
                     <div className="p-1.5">
-
                       <button
                         type="button"
-                        onClick={
-                          handleLogout
-                        }
-                        disabled={
-                          isLoggingOut
-                        }
+                        onClick={handleLogout}
+                        disabled={isLoggingOut}
                         className="
-                                                    flex
-                                                    w-full
-                                                    items-center
-                                                    gap-3
-                                                    rounded-[5px]
-                                                    px-3
-                                                    py-2.5
-                                                    text-left
-                                                    text-[12px]
-                                                    font-medium
-                                                    text-red-400
-                                                    transition
+                          flex
+                          w-full
+                          items-center
+                          gap-3
+                          rounded-[5px]
+                          px-3
+                          py-2.5
+                          text-left
+                          text-[12px]
+                          font-medium
+                          text-red-400
+                          transition
 
-                                                    hover:bg-red-500/[0.08]
-                                                    hover:text-red-300
+                          hover:bg-red-500/[0.08]
+                          hover:text-red-300
 
-                                                    disabled:cursor-not-allowed
-                                                    disabled:opacity-50
-                                                "
+                          disabled:cursor-not-allowed
+                          disabled:opacity-50
+                        "
                         role="menuitem"
                       >
-
                         {isLoggingOut ? (
                           <span
                             className="
-                                                            h-4
-                                                            w-4
-                                                            animate-spin
-                                                            rounded-full
-                                                            border-2
-                                                            border-red-400/20
-                                                            border-t-red-400
-                                                        "
+                              h-4
+                              w-4
+                              animate-spin
+                              rounded-full
+                              border-2
+                              border-red-400/20
+                              border-t-red-400
+                            "
                           />
                         ) : (
-                          <LogOut
-                            size={16}
-                          />
+                          <LogOut size={16} />
                         )}
 
                         <span>
@@ -1329,14 +1648,10 @@ export default function Header({ onMenuClick }) {
                             ? "Logging out..."
                             : "Log out"}
                         </span>
-
                       </button>
-
                     </div>
-
                   </div>
                 )}
-
               </div>
             </>
           )}
@@ -1344,16 +1659,14 @@ export default function Header({ onMenuClick }) {
       </header>
 
       {/* =================================================
-                BOTTOM CENTER TOAST
-            ================================================= */}
+          BOTTOM CENTER TOAST
+      ================================================= */}
 
       {toast && (
         <Toast
           type={toast.type}
           message={toast.message}
-          onClose={() =>
-            setToast(null)
-          }
+          onClose={() => setToast(null)}
         />
       )}
     </>

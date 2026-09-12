@@ -1,33 +1,129 @@
-import { useMemo } from "react";
-import { ArrowLeft, Heart, Music2, Play } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Check, Heart, Music2, Play } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { artists } from "@/data/artists";
 import { songs } from "@/data/songs";
 import SongRow from "@/components/music/SongRow";
+
 import { usePlayer } from "@/context/PlayerContext";
+import { useAuth } from "@/context/AuthContext";
+
+import { db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 export default function ArtistDetail() {
     const { artistId } = useParams();
     const navigate = useNavigate();
-    const { playSong } = usePlayer();
 
-    // ==========================================
+    const { playSong } = usePlayer();
+    const { user } = useAuth();
+
+    const [selectedArtists, setSelectedArtists] = useState([]);
+    const [preferencesLoading, setPreferencesLoading] = useState(true);
+
+    // =====================================================
     // FIND ARTIST
-    // ==========================================
+    // =====================================================
 
     const artist = useMemo(() => {
         return artists.find(
-            (item) => String(item.id) === String(artistId)
+            (item) =>
+                String(item.id) === String(artistId)
         );
     }, [artistId]);
 
-    // ==========================================
+    // =====================================================
+    // LOAD FIRESTORE ARTIST PREFERENCES
+    // =====================================================
+
+    useEffect(() => {
+        let isMounted = true;
+
+        const loadArtistPreferences = async () => {
+            if (!user) {
+                if (isMounted) {
+                    setSelectedArtists([]);
+                    setPreferencesLoading(false);
+                }
+
+                return;
+            }
+
+            setPreferencesLoading(true);
+
+            try {
+                const userSnap = await getDoc(
+                    doc(db, "users", user.uid)
+                );
+
+                if (!isMounted) return;
+
+                if (userSnap.exists()) {
+                    const data = userSnap.data();
+
+                    setSelectedArtists(
+                        Array.isArray(data.artists)
+                            ? data.artists
+                            : []
+                    );
+                } else {
+                    setSelectedArtists([]);
+                }
+            } catch (error) {
+                console.error(
+                    "Artist detail preferences error:",
+                    error
+                );
+
+                if (isMounted) {
+                    setSelectedArtists([]);
+                }
+            } finally {
+                if (isMounted) {
+                    setPreferencesLoading(false);
+                }
+            }
+        };
+
+        loadArtistPreferences();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [user]);
+
+    // =====================================================
+    // IS PREFERRED ARTIST?
+    // =====================================================
+
+    const isPreferredArtist =
+        !!user &&
+        selectedArtists.includes(artistId);
+
+    // =====================================================
     // FIND ARTIST SONGS
-    // ==========================================
+    //
+    // First use artistId from songs.
+    // Fallback to artist.songIds for existing data.
+    // =====================================================
 
     const artistSongs = useMemo(() => {
         if (!artist) return [];
+
+        const songsByArtistId = songs.filter((song) => {
+            const songArtistIds = Array.isArray(
+                song.artistId
+            )
+                ? song.artistId
+                : [];
+
+            return songArtistIds.includes(artist.id);
+        });
+
+        if (songsByArtistId.length) {
+            return songsByArtistId;
+        }
 
         return songs.filter((song) =>
             artist.songIds?.some(
@@ -37,9 +133,9 @@ export default function ArtistDetail() {
         );
     }, [artist]);
 
-    // ==========================================
+    // =====================================================
     // PLAY ALL
-    // ==========================================
+    // =====================================================
 
     const handlePlayAll = () => {
         if (!artistSongs.length) return;
@@ -47,9 +143,9 @@ export default function ArtistDetail() {
         playSong(artistSongs[0]);
     };
 
-    // ==========================================
+    // =====================================================
     // ARTIST NOT FOUND
-    // ==========================================
+    // =====================================================
 
     if (!artist) {
         return (
@@ -107,9 +203,9 @@ export default function ArtistDetail() {
     return (
         <div className="py-7 sm:py-9 lg:py-10">
 
-            {/* ======================================
+            {/* =================================================
                 BACK BUTTON
-            ====================================== */}
+            ================================================= */}
 
             <button
                 type="button"
@@ -134,25 +230,24 @@ export default function ArtistDetail() {
                 Back
             </button>
 
-            {/* ======================================
+            {/* =================================================
                 ARTIST HERO
-            ====================================== */}
+            ================================================= */}
 
             <section
-                className="
+                className={`
                     relative
                     overflow-hidden
                     rounded-[6px]
                     border
-                    border-white/[0.06]
                     bg-[#11181d]
-                "
+                    ${isPreferredArtist
+                        ? "border-[#10aaa9]/20"
+                        : "border-white/[0.06]"
+                    }
+                `}
             >
-
-                {/* Background Image
-                    Will automatically appear when
-                    artist image is added later.
-                */}
+                {/* Artist background */}
 
                 {artist.image && (
                     <div
@@ -167,6 +262,7 @@ export default function ArtistDetail() {
                         <img
                             src={artist.image}
                             alt=""
+                            loading="eager"
                             className="
                                 h-full
                                 w-full
@@ -176,6 +272,10 @@ export default function ArtistDetail() {
                         />
                     </div>
                 )}
+
+                {/* Additional dark overlay */}
+
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#071012]/60 via-transparent to-[#071012]/30" />
 
                 <div
                     className="
@@ -194,13 +294,13 @@ export default function ArtistDetail() {
                         lg:p-10
                     "
                 >
-
-                    {/* ==================================
+                    {/* =================================================
                         ARTIST IMAGE
-                    ================================== */}
+                    ================================================= */}
 
                     <div
-                        className="
+                        className={`
+                            relative
                             flex
                             h-40
                             w-40
@@ -210,19 +310,23 @@ export default function ArtistDetail() {
                             overflow-hidden
                             rounded-full
                             border
-                            border-white/[0.08]
                             bg-[#182126]
                             shadow-[0_20px_50px_rgba(0,0,0,0.45)]
                             sm:h-48
                             sm:w-48
                             lg:h-52
                             lg:w-52
-                        "
+                            ${isPreferredArtist
+                                ? "border-[#10aaa9]/50"
+                                : "border-white/[0.08]"
+                            }
+                        `}
                     >
                         {artist.image ? (
                             <img
                                 src={artist.image}
                                 alt={artist.name}
+                                loading="eager"
                                 className="
                                     h-full
                                     w-full
@@ -236,26 +340,79 @@ export default function ArtistDetail() {
                                 className="text-[#4f5b61]"
                             />
                         )}
+
+                        {/* PREFERRED BADGE */}
+
+                        {user && isPreferredArtist && (
+                            <div
+                                className="
+                                    absolute
+                                    right-2
+                                    top-2
+                                    flex
+                                    h-8
+                                    w-8
+                                    items-center
+                                    justify-center
+                                    rounded-full
+                                    border
+                                    border-[#10aaa9]/30
+                                    bg-[#071012]/90
+                                    text-[#10aaa9]
+                                    backdrop-blur-sm
+                                "
+                            >
+                                <Check
+                                    size={15}
+                                    strokeWidth={2.5}
+                                />
+                            </div>
+                        )}
                     </div>
 
-                    {/* ==================================
+                    {/* =================================================
                         ARTIST INFO
-                    ================================== */}
+                    ================================================= */}
 
                     <div className="min-w-0 flex-1 pb-1">
 
-                        <p
-                            className="
-                                mb-2
-                                text-[10px]
-                                font-semibold
-                                uppercase
-                                tracking-[0.18em]
-                                text-[#10aaa9]
-                            "
-                        >
-                            Artist
-                        </p>
+                        <div className="mb-2 flex flex-wrap items-center justify-center gap-2 md:justify-start">
+                            <p
+                                className="
+                                    text-[10px]
+                                    font-semibold
+                                    uppercase
+                                    tracking-[0.18em]
+                                    text-[#10aaa9]
+                                "
+                            >
+                                Artist
+                            </p>
+
+                            {user &&
+                                !preferencesLoading &&
+                                isPreferredArtist && (
+                                    <>
+                                        <span className="h-1 w-1 rounded-full bg-[#68747a]" />
+
+                                        <span
+                                            className="
+                                                inline-flex
+                                                items-center
+                                                gap-1
+                                                text-[9px]
+                                                font-medium
+                                                uppercase
+                                                tracking-[0.12em]
+                                                text-[#10aaa9]
+                                            "
+                                        >
+                                            <Check size={11} />
+                                            Your Artist
+                                        </span>
+                                    </>
+                                )}
+                        </div>
 
                         <h1
                             className="
@@ -297,9 +454,7 @@ export default function ArtistDetail() {
                             </span>
                         </div>
 
-                        {/* ==================================
-                            ACTION BUTTONS
-                        ================================== */}
+                        {/* ACTION BUTTONS */}
 
                         <div
                             className="
@@ -311,8 +466,7 @@ export default function ArtistDetail() {
                                 md:justify-start
                             "
                         >
-
-                            {/* Play All */}
+                            {/* PLAY ALL */}
 
                             <button
                                 type="button"
@@ -341,11 +495,10 @@ export default function ArtistDetail() {
                                     size={15}
                                     fill="currentColor"
                                 />
-
                                 Play All
                             </button>
 
-                            {/* Favorite */}
+                            {/* FAVORITE */}
 
                             <button
                                 type="button"
@@ -372,20 +525,17 @@ export default function ArtistDetail() {
                                     strokeWidth={1.7}
                                 />
                             </button>
-
                         </div>
                     </div>
                 </div>
             </section>
 
-            {/* ======================================
-                POPULAR SONGS
-            ====================================== */}
+            {/* =================================================
+                ARTIST SONGS
+            ================================================= */}
 
             <section className="mt-8">
-
                 <div className="mb-4">
-
                     <h2
                         className="
                             text-[17px]
@@ -400,15 +550,11 @@ export default function ArtistDetail() {
                     <p className="mt-1 text-[11px] text-[#68747a]">
                         Popular tracks by {artist.name}
                     </p>
-
                 </div>
 
-                {/* ==================================
-                    NO SONGS
-                ================================== */}
+                {/* NO SONGS */}
 
                 {artistSongs.length === 0 ? (
-
                     <div
                         className="
                             flex
@@ -436,12 +582,8 @@ export default function ArtistDetail() {
                             Songs by this artist will appear here.
                         </p>
                     </div>
-
                 ) : (
-
-                    /* ==================================
-                        SONG TABLE
-                    ================================== */
+                    /* SONG TABLE */
 
                     <div
                         className="
@@ -452,77 +594,74 @@ export default function ArtistDetail() {
                             bg-[#11181d]
                         "
                     >
-
-                        {/* Table Header */}
-
-                        <div
-                            className="
-                                grid
-                                min-w-[700px]
-                                grid-cols-[40px_minmax(220px,1.5fr)_1fr_90px_40px]
-                                items-center
-                                gap-4
-                                border-b
-                                border-white/[0.06]
-                                px-4
-                                py-3
-                            "
-                        >
-
-                            <span
-                                className="
-                                    text-[10px]
-                                    font-medium
-                                    uppercase
-                                    tracking-wider
-                                    text-[#68747a]
-                                "
-                            >
-                                #
-                            </span>
-
-                            <span
-                                className="
-                                    text-[10px]
-                                    font-medium
-                                    uppercase
-                                    tracking-wider
-                                    text-[#68747a]
-                                "
-                            >
-                                Song
-                            </span>
-
-                            <span
-                                className="
-                                    text-[10px]
-                                    font-medium
-                                    uppercase
-                                    tracking-wider
-                                    text-[#68747a]
-                                "
-                            >
-                                Album
-                            </span>
-
-                            <span
-                                className="
-                                    text-[10px]
-                                    font-medium
-                                    uppercase
-                                    tracking-wider
-                                    text-[#68747a]
-                                "
-                            >
-                                Duration
-                            </span>
-
-                            <span />
-                        </div>
-
-                        {/* Songs */}
-
                         <div className="min-w-[700px]">
+
+                            {/* TABLE HEADER */}
+
+                            <div
+                                className="
+                                    grid
+                                    grid-cols-[40px_minmax(220px,1.5fr)_1fr_90px_40px]
+                                    items-center
+                                    gap-4
+                                    border-b
+                                    border-white/[0.06]
+                                    px-4
+                                    py-3
+                                "
+                            >
+                                <span
+                                    className="
+                                        text-[10px]
+                                        font-medium
+                                        uppercase
+                                        tracking-wider
+                                        text-[#68747a]
+                                    "
+                                >
+                                    #
+                                </span>
+
+                                <span
+                                    className="
+                                        text-[10px]
+                                        font-medium
+                                        uppercase
+                                        tracking-wider
+                                        text-[#68747a]
+                                    "
+                                >
+                                    Song
+                                </span>
+
+                                <span
+                                    className="
+                                        text-[10px]
+                                        font-medium
+                                        uppercase
+                                        tracking-wider
+                                        text-[#68747a]
+                                    "
+                                >
+                                    Album
+                                </span>
+
+                                <span
+                                    className="
+                                        text-[10px]
+                                        font-medium
+                                        uppercase
+                                        tracking-wider
+                                        text-[#68747a]
+                                    "
+                                >
+                                    Duration
+                                </span>
+
+                                <span />
+                            </div>
+
+                            {/* SONGS */}
 
                             {artistSongs.map((song, index) => (
                                 <SongRow
@@ -539,11 +678,9 @@ export default function ArtistDetail() {
                                     audio={song.audio}
                                 />
                             ))}
-
                         </div>
                     </div>
                 )}
-
             </section>
         </div>
     );

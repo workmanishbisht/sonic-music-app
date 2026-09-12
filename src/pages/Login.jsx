@@ -18,7 +18,8 @@ import {
     GoogleAuthProvider,
     FacebookAuthProvider,
 } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
 /* =========================================================
    TOAST COMPONENT
@@ -159,6 +160,78 @@ function getFirebaseErrorMessage(error) {
 }
 
 /* =========================================================
+   ONBOARDING CHECK
+========================================================= */
+
+async function getPostAuthRoute(user) {
+    const userRef = doc(db, "users", user.uid);
+    const userSnap = await getDoc(userRef);
+
+    if (!userSnap.exists()) {
+        await setDoc(
+            userRef,
+            {
+                uid: user.uid,
+                name:
+                    user.displayName ||
+                    user.email?.split("@")[0] ||
+                    "Sonic User",
+                email: user.email || "",
+                photoURL: user.photoURL || "",
+                setupCompleted: false,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+        );
+
+        return "/onboarding";
+    }
+
+    return userSnap.data()?.setupCompleted === true
+        ? "/"
+        : "/onboarding";
+}
+
+/* =========================================================
+   AUTH VERIFICATION SCREEN
+========================================================= */
+
+function AuthVerificationScreen({ title = "Verifying your account" }) {
+    return (
+        <div className="fixed inset-0 z-[10000] flex min-h-screen items-center justify-center bg-[#070c0f] px-5 text-white">
+            <div className="flex w-full max-w-[360px] flex-col items-center text-center">
+                <div className="relative mb-7 flex h-[76px] w-[76px] items-center justify-center rounded-2xl border border-[#10aaa9]/20 bg-[#10aaa9]/[0.06]">
+                    <span className="absolute inset-0 animate-ping rounded-2xl bg-[#10aaa9]/[0.04]" />
+                    <div className="relative flex h-12 w-12 items-center justify-center rounded-xl bg-[#10aaa9]/10 text-[#10aaa9]">
+                        <span className="h-5 w-5 animate-spin rounded-full border-2 border-[#10aaa9]/20 border-t-[#10aaa9]" />
+                    </div>
+                </div>
+
+                <img
+                    src="/sonic.png"
+                    alt="Sonic"
+                    className="mb-7 h-[38px] w-auto object-contain"
+                />
+
+                <h2 className="text-[20px] font-semibold tracking-[-0.3px] text-white">
+                    {title}
+                </h2>
+
+                <p className="mt-2 text-[12px] leading-5 text-[#707b80]">
+                    Please wait while we securely verify your account.
+                </p>
+
+                <div className="mt-6 flex items-center gap-2 text-[10px] text-[#59656b]">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#10aaa9]" />
+                    <span>Connecting to Sonic</span>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/* =========================================================
    LOGIN PAGE
 ========================================================= */
 
@@ -184,6 +257,9 @@ export default function Login() {
         useState("");
 
     const [isLoading, setIsLoading] =
+        useState(false);
+
+    const [isVerifying, setIsVerifying] =
         useState(false);
 
     const [toast, setToast] = useState(null);
@@ -286,24 +362,19 @@ export default function Login() {
                         user.photoURL || "",
                 })
             );
-
             /* =================================================
-               SUCCESS TOAST
+               VERIFY FIREBASE SESSION
             ================================================= */
 
-            setToast({
-                type: "success",
-                message:
-                    "You're logged in successfully.",
-            });
+            await user.getIdToken(true);
 
-            /* =================================================
-               REDIRECT AFTER TOAST
-            ================================================= */
+            setIsVerifying(true);
+
+            const destination = await getPostAuthRoute(user);
 
             setTimeout(() => {
-                navigate("/");
-            }, 1200);
+                navigate(destination, { replace: true });
+            }, 2500);
 
         } catch (error) {
             const message =
@@ -408,15 +479,19 @@ export default function Login() {
                     photoURL: user.photoURL || "",
                 })
             );
+            /* =================================================
+               VERIFY FIREBASE SESSION
+            ================================================= */
 
-            setToast({
-                type: "success",
-                message: "You're logged in successfully.",
-            });
+            await user.getIdToken(true);
+
+            const destination = await getPostAuthRoute(user);
+
+            setIsVerifying(true);
 
             setTimeout(() => {
-                navigate("/");
-            }, 1200);
+                navigate(destination, { replace: true });
+            }, 2500);
         } catch (error) {
             const message = getSocialAuthErrorMessage(error);
 
@@ -466,15 +541,19 @@ export default function Login() {
                     photoURL: user.photoURL || "",
                 })
             );
+            /* =================================================
+               VERIFY FIREBASE SESSION
+            ================================================= */
 
-            setToast({
-                type: "success",
-                message: "You're logged in successfully.",
-            });
+            await user.getIdToken(true);
+
+            const destination = await getPostAuthRoute(user);
+
+            setIsVerifying(true);
 
             setTimeout(() => {
-                navigate("/");
-            }, 1200);
+                navigate(destination, { replace: true });
+            }, 2500);
         } catch (error) {
             const message = getSocialAuthErrorMessage(error);
 
@@ -491,6 +570,10 @@ export default function Login() {
     /* =====================================================
        RETURN
     ===================================================== */
+
+    if (isVerifying) {
+        return <AuthVerificationScreen />;
+    }
 
     return (
         <div className="min-h-screen bg-[#070c0f] text-white">

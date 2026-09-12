@@ -13,6 +13,7 @@ import {
     Users,
     Music2,
     Download,
+    Settings,
     Plus,
     X,
 } from "lucide-react";
@@ -73,6 +74,11 @@ const libraryNavigation = [
         icon: Download,
         path: null,
         disabled: true,
+    },
+    {
+        name: "Settings",
+        icon: Settings,
+        path: "/settings",
     },
 ];
 
@@ -150,6 +156,10 @@ export default function Sidebar({
 
         if (item.name === "Songs") {
             return location.pathname.startsWith("/songs");
+        }
+
+        if (item.name === "Settings") {
+            return location.pathname.startsWith("/settings");
         }
 
         return false;

@@ -1,36 +1,129 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
     ArrowLeft,
+    Check,
     Heart,
-    Play,
     Music2,
+    Play,
 } from "lucide-react";
 
 import { albums } from "@/data/albums";
 import { songs } from "@/data/songs";
 import SongRow from "@/components/music/SongRow";
+
 import { usePlayer } from "@/context/PlayerContext";
+import { useAuth } from "@/context/AuthContext";
+
+import { db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 export default function AlbumDetail() {
     const { albumId } = useParams();
     const navigate = useNavigate();
 
     const { playSong } = usePlayer();
+    const { user } = useAuth();
 
-    // ==========================================
+    const [userGenres, setUserGenres] = useState([]);
+    const [userArtists, setUserArtists] = useState([]);
+    const [userLanguages, setUserLanguages] = useState([]);
+    const [preferencesLoading, setPreferencesLoading] = useState(true);
+
+    // =====================================================
     // FIND ALBUM
-    // ==========================================
+    // =====================================================
 
     const album = useMemo(() => {
         return albums.find(
-            (item) => String(item.id) === String(albumId)
+            (item) =>
+                String(item.id) === String(albumId)
         );
     }, [albumId]);
 
-    // ==========================================
+    // =====================================================
+    // LOAD FIRESTORE PREFERENCES
+    // =====================================================
+
+    useEffect(() => {
+        let isMounted = true;
+
+        const loadPreferences = async () => {
+            if (!user) {
+                if (isMounted) {
+                    setUserGenres([]);
+                    setUserArtists([]);
+                    setUserLanguages([]);
+                    setPreferencesLoading(false);
+                }
+
+                return;
+            }
+
+            setPreferencesLoading(true);
+
+            try {
+                const userSnap = await getDoc(
+                    doc(db, "users", user.uid)
+                );
+
+                if (!isMounted) return;
+
+                if (userSnap.exists()) {
+                    const data = userSnap.data();
+
+                    setUserGenres(
+                        Array.isArray(data.genres)
+                            ? data.genres
+                            : []
+                    );
+
+                    setUserArtists(
+                        Array.isArray(data.artists)
+                            ? data.artists
+                            : []
+                    );
+
+                    setUserLanguages(
+                        Array.isArray(data.languages)
+                            ? data.languages
+                            : Array.isArray(data.language)
+                                ? data.language
+                                : []
+                    );
+                } else {
+                    setUserGenres([]);
+                    setUserArtists([]);
+                    setUserLanguages([]);
+                }
+            } catch (error) {
+                console.error(
+                    "Album detail preferences error:",
+                    error
+                );
+
+                if (isMounted) {
+                    setUserGenres([]);
+                    setUserArtists([]);
+                    setUserLanguages([]);
+                }
+            } finally {
+                if (isMounted) {
+                    setPreferencesLoading(false);
+                }
+            }
+        };
+
+        loadPreferences();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [user]);
+
+    // =====================================================
     // FIND ALBUM SONGS
-    // ==========================================
+    // =====================================================
 
     const albumSongs = useMemo(() => {
         if (!album) return [];
@@ -43,9 +136,74 @@ export default function AlbumDetail() {
         );
     }, [album]);
 
-    // ==========================================
+    // =====================================================
+    // ALBUM PERSONALIZATION SCORE
+    //
+    // Artist = 5
+    // Genre  = 3
+    // Language = 2
+    // =====================================================
+
+    const personalizationScore = useMemo(() => {
+        if (!albumSongs.length || !user) return 0;
+
+        return albumSongs.reduce((total, song) => {
+            let score = 0;
+
+            const songArtistIds = Array.isArray(
+                song.artistId
+            )
+                ? song.artistId
+                : [];
+
+            const artistMatch = songArtistIds.some(
+                (id) => userArtists.includes(id)
+            );
+
+            if (artistMatch) {
+                score += 5;
+            }
+
+            if (
+                song.genre &&
+                userGenres.some(
+                    (genre) =>
+                        String(genre).toLowerCase() ===
+                        String(song.genre).toLowerCase()
+                )
+            ) {
+                score += 3;
+            }
+
+            if (
+                song.language &&
+                userLanguages.some(
+                    (language) =>
+                        String(language).toLowerCase() ===
+                        String(song.language).toLowerCase()
+                )
+            ) {
+                score += 2;
+            }
+
+            return total + score;
+        }, 0);
+    }, [
+        albumSongs,
+        user,
+        userArtists,
+        userGenres,
+        userLanguages,
+    ]);
+
+    const isRecommended =
+        !!user &&
+        !preferencesLoading &&
+        personalizationScore > 0;
+
+    // =====================================================
     // PLAY ALBUM
-    // ==========================================
+    // =====================================================
 
     const handlePlayAll = async () => {
         if (!albumSongs.length) return;
@@ -53,9 +211,9 @@ export default function AlbumDetail() {
         await playSong(albumSongs[0]);
     };
 
-    // ==========================================
+    // =====================================================
     // ALBUM NOT FOUND
-    // ==========================================
+    // =====================================================
 
     if (!album) {
         return (
@@ -80,8 +238,7 @@ export default function AlbumDetail() {
                 </h1>
 
                 <p className="mt-2 text-[12px] text-[#7f8a90]">
-                    The album you're looking for doesn't
-                    exist.
+                    The album you're looking for doesn't exist.
                 </p>
 
                 <button
@@ -114,9 +271,9 @@ export default function AlbumDetail() {
     return (
         <div className="py-7 sm:py-9 lg:py-10">
 
-            {/* ======================================
+            {/* =================================================
                 BACK BUTTON
-            ====================================== */}
+            ================================================= */}
 
             <button
                 type="button"
@@ -141,21 +298,25 @@ export default function AlbumDetail() {
                 Back
             </button>
 
-            {/* ======================================
+            {/* =================================================
                 ALBUM HERO
-            ====================================== */}
+            ================================================= */}
 
             <section
-                className="
+                className={`
                     relative
                     overflow-hidden
                     rounded-[6px]
                     border
-                    border-white/[0.06]
                     bg-[#11181d]
-                "
+                    ${isRecommended
+                        ? "border-[#10aaa9]/20"
+                        : "border-white/[0.06]"
+                    }
+                `}
             >
                 {/* Background blur */}
+
                 <div
                     className="
                         pointer-events-none
@@ -168,6 +329,7 @@ export default function AlbumDetail() {
                     <img
                         src={album.image}
                         alt=""
+                        loading="eager"
                         className="
                             h-full
                             w-full
@@ -176,6 +338,8 @@ export default function AlbumDetail() {
                         "
                     />
                 </div>
+
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#071012]/60 via-transparent to-[#071012]/30" />
 
                 <div
                     className="
@@ -191,35 +355,102 @@ export default function AlbumDetail() {
                         lg:p-8
                     "
                 >
-                    {/* Album Cover */}
+                    {/* =================================================
+                        ALBUM COVER
+                    ================================================= */}
 
                     <div
-                        className="
+                        className={`
+                            relative
                             h-40
                             w-40
                             shrink-0
                             overflow-hidden
                             rounded-[5px]
+                            bg-[#182126]
                             shadow-[0_20px_50px_rgba(0,0,0,0.45)]
                             sm:h-48
                             sm:w-48
                             lg:h-52
                             lg:w-52
-                        "
+                            ${isRecommended
+                                ? "ring-1 ring-[#10aaa9]/40"
+                                : ""
+                            }
+                        `}
                     >
                         <img
                             src={album.image}
                             alt={album.title}
+                            loading="eager"
                             className="h-full w-full object-cover"
                         />
+
+                        {/* RECOMMENDED BADGE */}
+
+                        {user && isRecommended && (
+                            <div
+                                className="
+                                    absolute
+                                    right-2
+                                    top-2
+                                    inline-flex
+                                    items-center
+                                    gap-1.5
+                                    rounded-full
+                                    border
+                                    border-[#10aaa9]/30
+                                    bg-[#071012]/90
+                                    px-2.5
+                                    py-1.5
+                                    text-[9px]
+                                    font-medium
+                                    uppercase
+                                    tracking-[0.08em]
+                                    text-[#10aaa9]
+                                    backdrop-blur-sm
+                                "
+                            >
+                                <Check size={11} strokeWidth={2.5} />
+                                For You
+                            </div>
+                        )}
                     </div>
 
-                    {/* Album Info */}
+                    {/* =================================================
+                        ALBUM INFO
+                    ================================================= */}
 
                     <div className="min-w-0 flex-1 pb-1">
-                        <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#10aaa9]">
-                            Album
-                        </p>
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#10aaa9]">
+                                Album
+                            </p>
+
+                            {user &&
+                                !preferencesLoading &&
+                                isRecommended && (
+                                    <>
+                                        <span className="h-1 w-1 rounded-full bg-[#68747a]" />
+
+                                        <span
+                                            className="
+                                                inline-flex
+                                                items-center
+                                                gap-1
+                                                text-[9px]
+                                                font-medium
+                                                uppercase
+                                                tracking-[0.12em]
+                                                text-[#10aaa9]
+                                            "
+                                        >
+                                            <Check size={11} />
+                                            Recommended for you
+                                        </span>
+                                    </>
+                                )}
+                        </div>
 
                         <h1
                             className="
@@ -251,7 +482,7 @@ export default function AlbumDetail() {
                             <span>2026</span>
                         </div>
 
-                        {/* Actions */}
+                        {/* ACTIONS */}
 
                         <div className="mt-6 flex items-center gap-3">
                             <button
@@ -315,21 +546,19 @@ export default function AlbumDetail() {
                 </div>
             </section>
 
-            {/* ======================================
+            {/* =================================================
                 SONGS
-            ====================================== */}
+            ================================================= */}
 
             <section className="mt-8">
-                <div className="mb-4 flex items-center justify-between">
-                    <div>
-                        <h2 className="text-[17px] font-semibold text-white">
-                            Songs
-                        </h2>
+                <div className="mb-4">
+                    <h2 className="text-[17px] font-semibold text-white">
+                        Songs
+                    </h2>
 
-                        <p className="mt-1 text-[11px] text-[#68747a]">
-                            Songs from {album.title}
-                        </p>
-                    </div>
+                    <p className="mt-1 text-[11px] text-[#68747a]">
+                        Songs from {album.title}
+                    </p>
                 </div>
 
                 {albumSongs.length === 0 ? (
@@ -357,8 +586,7 @@ export default function AlbumDetail() {
                         </p>
 
                         <p className="mt-1 text-[11px] text-[#68747a]">
-                            Songs will appear here when
-                            available.
+                            Songs will appear here when available.
                         </p>
                     </div>
                 ) : (
@@ -371,62 +599,58 @@ export default function AlbumDetail() {
                             bg-[#11181d]
                         "
                     >
-                        {/* Table Header */}
-
-                        <div
-                            className="
-                                grid
-                                min-w-[700px]
-                                grid-cols-[40px_minmax(220px,1.5fr)_1fr_90px_40px]
-                                items-center
-                                gap-4
-                                border-b
-                                border-white/[0.06]
-                                px-4
-                                py-3
-                            "
-                        >
-                            <span className="text-[10px] font-medium uppercase tracking-wider text-[#68747a]">
-                                #
-                            </span>
-
-                            <span className="text-[10px] font-medium uppercase tracking-wider text-[#68747a]">
-                                Song
-                            </span>
-
-                            <span className="text-[10px] font-medium uppercase tracking-wider text-[#68747a]">
-                                Album
-                            </span>
-
-                            <span className="text-[10px] font-medium uppercase tracking-wider text-[#68747a]">
-                                Duration
-                            </span>
-
-                            <span />
-                        </div>
-
-                        {/* Songs */}
-
                         <div className="min-w-[700px]">
-                            {albumSongs.map(
-                                (song, index) => (
-                                    <SongRow
-                                        key={song.id}
-                                        song={song}
-                                        number={String(
-                                            index + 1
-                                        ).padStart(2, "0")}
-                                        image={song.image}
-                                        title={song.title}
-                                        artist={song.artist}
-                                        album={song.album}
-                                        duration={
-                                            song.duration
-                                        }
-                                        audio={song.audio}
-                                    />
-                                )
-                            )}
+
+                            {/* TABLE HEADER */}
+
+                            <div
+                                className="
+                                    grid
+                                    grid-cols-[40px_minmax(220px,1.5fr)_1fr_90px_40px]
+                                    items-center
+                                    gap-4
+                                    border-b
+                                    border-white/[0.06]
+                                    px-4
+                                    py-3
+                                "
+                            >
+                                <span className="text-[10px] font-medium uppercase tracking-wider text-[#68747a]">
+                                    #
+                                </span>
+
+                                <span className="text-[10px] font-medium uppercase tracking-wider text-[#68747a]">
+                                    Song
+                                </span>
+
+                                <span className="text-[10px] font-medium uppercase tracking-wider text-[#68747a]">
+                                    Album
+                                </span>
+
+                                <span className="text-[10px] font-medium uppercase tracking-wider text-[#68747a]">
+                                    Duration
+                                </span>
+
+                                <span />
+                            </div>
+
+                            {/* SONGS */}
+
+                            {albumSongs.map((song, index) => (
+                                <SongRow
+                                    key={song.id}
+                                    song={song}
+                                    number={String(
+                                        index + 1
+                                    ).padStart(2, "0")}
+                                    image={song.image}
+                                    title={song.title}
+                                    artist={song.artist}
+                                    album={song.album}
+                                    duration={song.duration}
+                                    audio={song.audio}
+                                />
+                            ))}
                         </div>
                     </div>
                 )}

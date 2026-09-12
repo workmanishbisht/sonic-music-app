@@ -22,6 +22,8 @@ import ArtistDetail from "./pages/ArtistDetail";
 import PlaylistDetail from "./pages/PlaylistDetail";
 import Premium from "./pages/Premium";
 import Profile from "./pages/Profile";
+import Settings from "./pages/Settings";
+import Onboarding from "./pages/Onboarding";
 
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -32,7 +34,6 @@ export default function App() {
             <AuthProvider>
                 <PlaylistProvider>
                     <PlayerProvider>
-
                         <Routes>
 
                             {/* =================================
@@ -139,7 +140,26 @@ export default function App() {
                                     }
                                 />
 
+                                {/* Settings */}
+                                <Route
+                                    path="/settings"
+                                    element={
+                                        <ProtectedRoute>
+                                            <Settings />
+                                        </ProtectedRoute>
+                                    }
+                                />
+
                             </Route>
+
+                            {/* =================================
+                                ONBOARDING
+                            ================================= */}
+
+                            <Route
+                                path="/onboarding"
+                                element={<Onboarding />}
+                            />
 
                             {/* =================================
                                 AUTH PAGES
@@ -158,7 +178,6 @@ export default function App() {
                             />
 
                         </Routes>
-
                     </PlayerProvider>
                 </PlaylistProvider>
             </AuthProvider>

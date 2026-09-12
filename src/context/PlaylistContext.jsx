@@ -19,6 +19,7 @@ import {
 
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
+import favoritePlaylist from "@/assets/images/playlist-favorite.png";
 
 const PlaylistContext = createContext(null);
 
@@ -34,6 +35,7 @@ export function PlaylistProvider({ children }) {
 
     useEffect(() => {
         if (authLoading) {
+            setLoading(true);
             return;
         }
 
@@ -64,10 +66,14 @@ export function PlaylistProvider({ children }) {
 
                 userPlaylists.sort((a, b) => {
                     const aTime =
-                        a.createdAt?.seconds || 0;
+                        a.createdAt?.seconds ||
+                        a.createdAt?.toMillis?.() ||
+                        0;
 
                     const bTime =
-                        b.createdAt?.seconds || 0;
+                        b.createdAt?.seconds ||
+                        b.createdAt?.toMillis?.() ||
+                        0;
 
                     return bTime - aTime;
                 });
@@ -96,7 +102,7 @@ export function PlaylistProvider({ children }) {
     const createPlaylist = async ({
         name,
         description = "",
-        image = "/src/assets/images/playlist-favorite.png",
+        image = favoritePlaylist,
         songId = null,
     }) => {
         if (!user) {
@@ -113,6 +119,13 @@ export function PlaylistProvider({ children }) {
             );
         }
 
+        const playlistSongs =
+            songId !== null &&
+            songId !== undefined &&
+            songId !== ""
+                ? [songId]
+                : [];
+
         const playlistsRef = collection(
             db,
             "users",
@@ -124,12 +137,7 @@ export function PlaylistProvider({ children }) {
             name: trimmedName,
             description: description?.trim() || "",
             image,
-            songs:
-                songId !== null &&
-                songId !== undefined &&
-                songId !== ""
-                    ? [songId]
-                    : [],
+            songs: playlistSongs,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         };
@@ -150,8 +158,14 @@ export function PlaylistProvider({ children }) {
     // ==========================================
 
     const deletePlaylist = async (playlistId) => {
-        if (!user || !playlistId) {
-            return;
+        if (!user) {
+            throw new Error(
+                "You must be logged in to delete a playlist."
+            );
+        }
+
+        if (!playlistId) {
+            throw new Error("Playlist ID is required.");
         }
 
         const playlistRef = doc(
@@ -173,8 +187,14 @@ export function PlaylistProvider({ children }) {
         playlistId,
         newName
     ) => {
-        if (!user || !playlistId) {
-            return;
+        if (!user) {
+            throw new Error(
+                "You must be logged in to rename a playlist."
+            );
+        }
+
+        if (!playlistId) {
+            throw new Error("Playlist ID is required.");
         }
 
         const trimmedName = newName?.trim();
@@ -205,10 +225,26 @@ export function PlaylistProvider({ children }) {
 
     const updatePlaylist = async (
         playlistId,
-        data
+        data = {}
     ) => {
-        if (!user || !playlistId) {
-            return;
+        if (!user) {
+            throw new Error(
+                "You must be logged in to update a playlist."
+            );
+        }
+
+        if (!playlistId) {
+            throw new Error("Playlist ID is required.");
+        }
+
+        if (
+            !data ||
+            typeof data !== "object" ||
+            Array.isArray(data)
+        ) {
+            throw new Error(
+                "Invalid playlist update data."
+            );
         }
 
         const playlistRef = doc(
@@ -233,14 +269,22 @@ export function PlaylistProvider({ children }) {
         playlistId,
         songId
     ) => {
+        if (!user) {
+            throw new Error(
+                "You must be logged in to add songs to a playlist."
+            );
+        }
+
+        if (!playlistId) {
+            throw new Error("Playlist ID is required.");
+        }
+
         if (
-            !user ||
-            !playlistId ||
             songId === null ||
             songId === undefined ||
             songId === ""
         ) {
-            return;
+            throw new Error("Song ID is required.");
         }
 
         const playlist = playlists.find(
@@ -248,9 +292,7 @@ export function PlaylistProvider({ children }) {
         );
 
         if (!playlist) {
-            throw new Error(
-                "Playlist not found."
-            );
+            throw new Error("Playlist not found.");
         }
 
         const playlistRef = doc(
@@ -275,14 +317,22 @@ export function PlaylistProvider({ children }) {
         playlistId,
         songId
     ) => {
+        if (!user) {
+            throw new Error(
+                "You must be logged in to remove songs from a playlist."
+            );
+        }
+
+        if (!playlistId) {
+            throw new Error("Playlist ID is required.");
+        }
+
         if (
-            !user ||
-            !playlistId ||
             songId === null ||
             songId === undefined ||
             songId === ""
         ) {
-            return;
+            throw new Error("Song ID is required.");
         }
 
         const playlist = playlists.find(
@@ -290,9 +340,7 @@ export function PlaylistProvider({ children }) {
         );
 
         if (!playlist) {
-            throw new Error(
-                "Playlist not found."
-            );
+            throw new Error("Playlist not found.");
         }
 
         const playlistRef = doc(
@@ -332,8 +380,23 @@ export function PlaylistProvider({ children }) {
             : [];
 
         return playlistSongs.some(
-            (id) =>
-                String(id) === String(songId)
+            (id) => String(id) === String(songId)
+        );
+    };
+
+    // ==========================================
+    // GET PLAYLIST BY ID
+    // ==========================================
+
+    const getPlaylistById = (playlistId) => {
+        if (!playlistId) {
+            return null;
+        }
+
+        return (
+            playlists.find(
+                (playlist) => playlist.id === playlistId
+            ) || null
         );
     };
 
@@ -370,6 +433,7 @@ export function PlaylistProvider({ children }) {
         removeSongFromPlaylist,
 
         isSongInPlaylist,
+        getPlaylistById,
         getPlaylistSongCount,
     };
 
@@ -385,8 +449,7 @@ export function PlaylistProvider({ children }) {
 // ==========================================
 
 export function usePlaylist() {
-    const context =
-        useContext(PlaylistContext);
+    const context = useContext(PlaylistContext);
 
     if (!context) {
         throw new Error(
